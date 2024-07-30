@@ -14,3 +14,8 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del version, PackageNotFoundError
+
+from nicegui import app
+from pathlib import Path
+
+app.add_static_files("/static", str(Path(__file__).parent / "static"))
