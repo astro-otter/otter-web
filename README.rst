@@ -69,7 +69,7 @@ The repository hosts a SQLite database that can be used to test the application.
 
 .. code-block:: bash
 
-    cd otter_web/scripts
+    cd otter-web/scripts
     python generate_database.py
 
 
