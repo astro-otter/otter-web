@@ -151,17 +151,14 @@ todo_emit_warnings = True
 
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
+# The theme to use for HTML and HTML Help client.  See the documentation for
 # a list of builtin themes.
 html_theme = "alabaster"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-html_theme_options = {
-    "sidebar_width": "300px",
-    "page_width": "1200px"
-}
+html_theme_options = {"sidebar_width": "300px", "page_width": "1200px"}
 
 # Add any paths that contain custom themes here, relative to this directory.
 # html_theme_path = []
@@ -198,7 +195,7 @@ html_static_path = ["_static"]
 # Custom sidebar templates, maps document names to template names.
 # html_sidebars = {}
 
-# Additional templates that should be rendered to pages, maps page names to
+# Additional templates that should be rendered to client, maps page names to
 # template names.
 # html_additional_pages = {}
 
@@ -208,10 +205,10 @@ html_static_path = ["_static"]
 # If false, no index is generated.
 # html_use_index = True
 
-# If true, the index is split into individual pages for each letter.
+# If true, the index is split into individual client for each letter.
 # html_split_index = False
 
-# If true, links to the reST sources are added to the pages.
+# If true, links to the reST sources are added to the client.
 # html_show_sourcelink = True
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
@@ -220,7 +217,7 @@ html_static_path = ["_static"]
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
 # html_show_copyright = True
 
-# If true, an OpenSearch description file will be output, and all pages will
+# If true, an OpenSearch description file will be output, and all client will
 # contain a <link> tag referring to it.  The value of this option must be the
 # base URL from which the finished HTML is served.
 # html_use_opensearch = ''
