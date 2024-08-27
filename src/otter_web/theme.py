@@ -2,7 +2,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from nicegui import ui, app
 
-
 @contextmanager
 def frame(drawer=None):
     dark = ui.dark_mode()
