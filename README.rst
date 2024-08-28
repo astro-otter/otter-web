@@ -41,6 +41,14 @@ Clone the repository and install the package using the following:
     cd otter-web
     pip install -e .
 
+Clone and install the OTTER API
+.. code-block:: bash
+
+    git clone https://github.com/astro-otter/otter.git
+    cd otter
+    pip install -e .
+
+
 Running the application requires installing and starting the database and API server. These can both be started with:
 
 .. note::
