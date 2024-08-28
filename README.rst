@@ -28,7 +28,7 @@ Otter Web
 
 Otter Web is a web application for the Organization for the Open mulTiwavelength Transient Event Repository (OTTER) project.
 
-This repository contains both the front-end code for displaying and interacting with the OTTER database, as well as the API interface.
+This repository contains the front-end code for displaying and interacting with the OTTER database.
 
 Install and run
 ---------------
@@ -37,41 +37,28 @@ Clone the repository and install the package using the following:
 
 .. code-block:: bash
 
-    git clone https://github.com/nmearl/otter-web.git
+    git clone https://github.com/astro-otter/otter-web.git
     cd otter-web
     pip install -e .
 
-Running the application requires starting the API server and the front-end server. The API server can be started using the following:
+Running the application requires installing and starting the database and API server. These can both be started with:
 
 .. note::
 
-    The API server expects the OTTER SQL database to be in the same directory. If the database is not present, the API server will create a new, empty database. Start the API server in the same directory as the `tde_database.db` database.
+   You must have docker installed and setup for installing the database and API server!
 
 .. code-block:: bash
 
-    uvicorn otter_web.server.api:app --reload --port=10202
+   git clone git@github.com:astro-otter/otterdb.git
+   cd otterdb
+   ./build.sh    
 
-In another terminal window, start the front-end server using the following:
+Then start the front-end website server using the following:
 
 .. code-block:: bash
 
-    cd otter-web/scripts
+    cd otter-web
     python start.py
-
-(Re-)Creating the database
---------------------------
-
-The repository hosts a SQLite database that can be used to test the application. If the content in the main OTTER DB repository changes, the database will need to be regenerated. The API server must be running to compose the database. To create the database, run the following:
-
-.. note::
-
-    The `generate_database.py` script needs an explicit path to the OTTER DB `.otter` directory. Be sure to edit the path in the script before running it.
-
-.. code-block:: bash
-
-    cd otter-web/scripts
-    python generate_database.py
-
 
 Recap of getting up and running
 -------------------------------
