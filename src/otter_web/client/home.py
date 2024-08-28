@@ -50,7 +50,6 @@ def post_table(events:List[dict]) -> None:
     )
     
     for i, event_json in enumerate(events):
-        print(event_json['name'])
         event = TransientRead(**event_json)
 
         coord_string = SkyCoord(
