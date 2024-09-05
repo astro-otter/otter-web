@@ -12,6 +12,8 @@ from plotly import graph_objects as go
 import matplotlib as mpl
 from itertools import cycle
 
+YAXES_IS_REVERSED = False
+
 def plot_lightcurve(phot, obs_label, fig, plot):
 
     fig.data = [] # clear the data from the figure
@@ -34,7 +36,7 @@ def plot_lightcurve(phot, obs_label, fig, plot):
     elif obs_label == 'UV/Optical/IR':
         ylabel = 'AB Magnitude'
     elif obs_label == 'X-Ray':
-        ylabel = 'Flux [erg/s/cm2]'
+        ylabel = 'Flux Density [uJy]'
     else:
         raise ValueError('Invalid plot label!')
         
@@ -47,7 +49,9 @@ def plot_lightcurve(phot, obs_label, fig, plot):
 
     if obs_label == 'UV/Optical/IR':
         fig.update_yaxes(autorange='reversed')
-    
+    if obs_label in {"Radio", "X-Ray"} and fig.layout.yaxis.autorange == 'reversed':
+        fig.update_yaxes(autorange=True)
+        
     plot.update()
 
 def generate_property_table(meta):
@@ -131,12 +135,12 @@ def transient_subpage(transient_default_name:str):
 
     db = Otter(url=API_URL)
     meta = db.get_meta(names=transient_default_name)[0]
-
+ 
     phot_types = {}
     obs_types = {
         'radio':'mJy',
         'uvoir':'mag(AB)',
-        'xray':'erg/s/cm^2'
+        'xray':'uJy'
     }
     label_map = {
         'radio' : 'Radio',

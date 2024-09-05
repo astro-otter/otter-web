@@ -220,6 +220,10 @@ async def page():
         ui.label("All Transients").classes("text-h4")
         post_table(all_events)
 
+        '''
+        # I'm commenting out the query box on the home page since it has moved
+        # to the search page
+        
         ui.label("Editable AQL Query for the above Table").classes("text-h4")
 
         query = """FOR transient IN transients
@@ -233,3 +237,4 @@ async def page():
                 [r for r in db.AQLQuery(e.value, rawResults=True)]
             )
         ).classes("w-full")
+        '''

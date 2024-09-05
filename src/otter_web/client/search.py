@@ -5,6 +5,8 @@ from .home import post_table
 
 from functools import partialmethod
 
+from astropy.coordinates import SkyCoord
+
 from otter import Otter
 
 db = Otter(url=API_URL)
@@ -20,11 +22,51 @@ class SearchInput:
     add_name = partialmethod(update, key='names')
     add_minz = partialmethod(update, key='minz')
     add_maxz = partialmethod(update, key='maxz')
-    
+    add_ra = partialmethod(update, key='ra')
+    add_dec = partialmethod(update, key='dec')
+    add_radius = partialmethod(update, key='radius')
+    add_hasphot = partialmethod(update, key='hasphot')
+    add_ra_unit = partialmethod(update, key='ra_unit')
+    add_dec_unit = partialmethod(update, key='dec_unit')
     
 def do_search(search_input):
-    print(search_input.search_kwargs)
     ui.notify('Search Initiated...')
+
+    # do some validation
+    if (
+            'ra' in search_input.search_kwargs or
+            'dec' in search_input.search_kwargs or
+            'ra_unit' in search_input.search_kwargs or
+            'dec_unit' in search_input.search_kwargs
+    ):
+        # then we need all four of those
+        try:
+            assert 'ra' in search_input.search_kwargs
+            assert 'dec' in search_input.search_kwargs
+            assert 'ra_unit' in search_input.search_kwargs
+            assert 'dec_unit' in search_input.search_kwargs
+        except AssertionError:
+            ui.notify(
+                'If RA or Dec is provided then the RA, Dec, RA Unit, and Dec Unit must all be provided!'
+            )
+        
+            
+    # now do some cleaning
+    if 'ra' in search_input.search_kwargs:
+        search_input.search_kwargs['coords'] = SkyCoord(
+            search_input.search_kwargs['ra'],
+            search_input.search_kwargs['dec'],
+            unit = (
+                search_input.search_kwargs['ra_unit'],
+                search_input.search_kwargs['dec_unit']
+            )
+        )
+
+        del search_input.search_kwargs['ra']
+        del search_input.search_kwargs['dec']
+        del search_input.search_kwargs['ra_unit']
+        del search_input.search_kwargs['dec_unit']
+    
     res = db.get_meta(**search_input.search_kwargs)
     print(res)
     post_table.refresh(res)
@@ -33,27 +75,60 @@ def do_search(search_input):
 def search_form():
 
     search_input = SearchInput()
-    
-    names = ui.input(
-        'Transient Name',
-        placeholder='Enter a transient name or partial name',
-        on_change = search_input.add_name
-    )
-    
-    minz = ui.number(
-        'Minimum Redshift',
-        placeholder='Enter a minimum redshift',
-        on_change = search_input.add_minz
-    )
 
-    maxz = ui.number(
-        'Maximum Redshift',
-        placeholder='Enter a maximum redshift',
-        on_change = search_input.add_maxz
-    )
-    
-    print(search_input.search_kwargs)
-    
+    with ui.grid(columns=3):
+        names = ui.input(
+            'Transient Name',
+            placeholder='Enter a transient name or partial name',
+            on_change = search_input.add_name
+        )
+
+        ra = ui.input(
+            'RA',
+            placeholder='Enter an RA',
+            on_change = search_input.add_ra
+        )
+
+        dec = ui.input(
+            'Declination',
+            placeholder='Enter a Dec.',
+            on_change = search_input.add_dec
+        )
+
+        radius = ui.number(
+            'Search Radius (")',
+            placeholder='Default is 5"',
+            on_change = search_input.add_radius
+        )
+
+        unit_options = ['hourangle', 'degree']
+        ra_unit = ui.select(
+            unit_options,
+            label = 'RA Unit',
+            on_change = search_input.add_ra_unit
+        )
+        dec_unit = ui.select(
+            unit_options,
+            label = 'Declination Unit',
+            on_change = search_input.add_dec_unit
+        )
+        
+        minz = ui.number(
+            'Minimum Redshift',
+            placeholder='Enter a minimum redshift',
+            on_change = search_input.add_minz
+        )
+        maxz = ui.number(
+            'Maximum Redshift',
+            placeholder='Enter a maximum redshift',
+            on_change = search_input.add_maxz
+        )
+
+        hasphot = ui.checkbox(
+            "Has Photometry?",
+            on_change = search_input.add_hasphot
+        )
+        
     ui.button('Submit').props('type="submit"').on_click(lambda: do_search(search_input))        
 
 def raw_aql_query():
@@ -86,12 +161,12 @@ async def search():
         ui.label("Search OTTER").classes("text-h4")
         
         # Display the initial
-        with ui.grid(rows=2) as grid:
+        with ui.grid(rows="40px auto").classes("w-full") as grid:
             selected_tab = ui.toggle(
                 ['Search Form', 'AQL Query'],
                 value='Search Form',
                 on_change=lambda e: show_form(e.value, grid)
-            )
+            ).style("width:20.8%")
             
             show_form(selected_tab.value)
 
