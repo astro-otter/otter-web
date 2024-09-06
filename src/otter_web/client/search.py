@@ -35,16 +35,14 @@ def do_search(search_input):
     # do some validation
     if (
             'ra' in search_input.search_kwargs or
-            'dec' in search_input.search_kwargs or
-            'ra_unit' in search_input.search_kwargs or
-            'dec_unit' in search_input.search_kwargs
+            'dec' in search_input.search_kwargs
     ):
         # then we need all four of those
         try:
             assert 'ra' in search_input.search_kwargs
             assert 'dec' in search_input.search_kwargs
             assert 'ra_unit' in search_input.search_kwargs
-            assert 'dec_unit' in search_input.search_kwargs
+
         except AssertionError:
             ui.notify(
                 'If RA or Dec is provided then the RA, Dec, RA Unit, and Dec Unit must all be provided!'
@@ -58,15 +56,10 @@ def do_search(search_input):
             search_input.search_kwargs['dec'],
             unit = (
                 search_input.search_kwargs['ra_unit'],
-                search_input.search_kwargs['dec_unit']
+                'deg' # assume always in degrees
             )
         )
 
-        del search_input.search_kwargs['ra']
-        del search_input.search_kwargs['dec']
-        del search_input.search_kwargs['ra_unit']
-        del search_input.search_kwargs['dec_unit']
-    
     res = db.get_meta(**search_input.search_kwargs)
     print(res)
     post_table.refresh(res)
@@ -90,8 +83,8 @@ def search_form():
         )
 
         dec = ui.input(
-            'Declination',
-            placeholder='Enter a Dec.',
+            'Declination (deg.)',
+            placeholder='Enter a Dec. (deg.)',
             on_change = search_input.add_dec
         )
 
@@ -105,14 +98,11 @@ def search_form():
         ra_unit = ui.select(
             unit_options,
             label = 'RA Unit',
+            value = unit_options[0],
             on_change = search_input.add_ra_unit
         )
-        dec_unit = ui.select(
-            unit_options,
-            label = 'Declination Unit',
-            on_change = search_input.add_dec_unit
-        )
-        
+        search_input.add_ra_unit(ra_unit)
+                
         minz = ui.number(
             'Minimum Redshift',
             placeholder='Enter a minimum redshift',
