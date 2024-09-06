@@ -27,7 +27,7 @@ class SearchInput:
     add_radius = partialmethod(update, key='radius')
     add_hasphot = partialmethod(update, key='hasphot')
     add_ra_unit = partialmethod(update, key='ra_unit')
-    add_dec_unit = partialmethod(update, key='dec_unit')
+    add_classification = partialmethod(update, key='classification')
     
 def do_search(search_input):
     ui.notify('Search Initiated...')
@@ -82,32 +82,26 @@ def search_form():
             on_change = search_input.add_ra
         )
 
-        dec = ui.input(
-            'Declination (deg.)',
-            placeholder='Enter a Dec. (deg.)',
-            on_change = search_input.add_dec
-        )
-
         radius = ui.number(
             'Search Radius (")',
             placeholder='Default is 5"',
             on_change = search_input.add_radius
         )
 
-        unit_options = ['hourangle', 'degree']
-        ra_unit = ui.select(
-            unit_options,
-            label = 'RA Unit',
-            value = unit_options[0],
-            on_change = search_input.add_ra_unit
+        
+        class_options = ['TDE', 'ANT']
+        searchclass = ui.select(
+            class_options,
+            label = 'Classification',
+            on_change = search_input.add_classification
         )
-        search_input.add_ra_unit(ra_unit)
-                
-        minz = ui.number(
-            'Minimum Redshift',
-            placeholder='Enter a minimum redshift',
-            on_change = search_input.add_minz
+
+        dec = ui.input(
+            'Declination (deg.)',
+            placeholder='Enter a Dec. (deg.)',
+            on_change = search_input.add_dec
         )
+
         maxz = ui.number(
             'Maximum Redshift',
             placeholder='Enter a maximum redshift',
@@ -118,6 +112,22 @@ def search_form():
             "Has Photometry?",
             on_change = search_input.add_hasphot
         )
+
+        unit_options = ['hourangle', 'degree']
+        ra_unit = ui.select(
+            unit_options,
+            label = 'RA Unit',
+            value = unit_options[0],
+            on_change = search_input.add_ra_unit
+        )
+        search_input.add_ra_unit(ra_unit)
+        
+        minz = ui.number(
+            'Minimum Redshift',
+            placeholder='Enter a minimum redshift',
+            on_change = search_input.add_minz
+        )
+
         
     ui.button('Submit').props('type="submit"').on_click(lambda: do_search(search_input))        
 
