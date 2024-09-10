@@ -89,7 +89,7 @@ def search_form():
         )
 
         
-        class_options = ['TDE', 'ANT']
+        class_options = ['TDE', 'ANT', 'SN', 'SLSN']
         searchclass = ui.select(
             class_options,
             label = 'Classification',

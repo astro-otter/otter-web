@@ -13,6 +13,7 @@ import matplotlib as mpl
 from itertools import cycle
 
 YAXES_IS_REVERSED = False
+SNR_THRESHOLD = 1
 
 def plot_lightcurve(phot, obs_label, fig, plot):
 
@@ -22,13 +23,22 @@ def plot_lightcurve(phot, obs_label, fig, plot):
     n_lines = len(phot.filter_name.unique())
     colors = cmap(np.linspace(0, 1, n_lines))
 
-    for (band, grp), c in zip(phot.groupby('filter_name'), colors):
+    for (band, grp_all), c in zip(phot.groupby('filter_name'), colors):
+
+        # make an approximate cut on "SNR" (really just flux/flux_err)
+
+        if obs_label == 'UV/Optical/IR': 
+            grp = grp_all[grp_all.converted_flux/grp_all.converted_flux_err > SNR_THRESHOLD]
+        else:
+            grp = grp_all
+            
         fig.add_scatter(
             x = grp.converted_date,
             y = grp.converted_flux,
             error_y = dict(array=grp.converted_flux_err),
             name = band,
-            marker = dict(color=mpl.colors.to_hex(c))
+            marker = dict(color=mpl.colors.to_hex(c)),
+            mode = 'markers'
         )
 
     if obs_label == 'Radio':
