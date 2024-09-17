@@ -43,14 +43,19 @@ def frame(drawer=None):
                 ui.separator().props("dark vertical inset").classes("q-mr-sm")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Catalog", "/catalog").classes(replace="")
+                ui.link("Catalog", "/").classes(replace="")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Search", "/").classes(replace="")
+                ui.link("Search", "/search").classes(replace="")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Documentation", "/").classes(replace="")
-
+                ui.link("Upload Data", "/upload").classes(replace="")
+                
+            with ui.button().props("flat").classes("text-white"):
+                ui.link(
+                    "Documentation", "https://astro-otter.readthedocs.io"
+                ).classes(replace="")
+    
             ui.element("q-space")
 
             with ui.button().props("flat").classes("text-white"):
