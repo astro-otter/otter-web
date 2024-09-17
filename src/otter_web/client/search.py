@@ -1,9 +1,14 @@
+import io
+import zipfile
+import json
+
 from nicegui import ui
 from ..theme import frame
 from ..config import API_URL
 from .home import post_table
 
-from functools import partialmethod
+from functools import partialmethod, partial
+from dataclasses import dataclass
 
 from astropy.coordinates import SkyCoord
 
@@ -28,8 +33,42 @@ class SearchInput:
     add_hasphot = partialmethod(update, key='hasphot')
     add_ra_unit = partialmethod(update, key='ra_unit')
     add_classification = partialmethod(update, key='classification')
-    
-def do_search(search_input):
+
+@dataclass
+class SearchResults:
+    results: list[dict]
+
+    @ui.refreshable
+    def write_results_to_zip(self):
+        """
+        Writes the search results to a zipfile in memory to stage for download
+
+        Modified from https://stackoverflow.com/questions/2463770/python-in-memory-zip-library
+        """
+        if self.results is None:
+            ui.notify("You must do a search to download search results!")
+            return
+
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+            for data in self.results:
+                file_name = f"{data.default_name}.json"
+                file_str = io.BytesIO(
+                    bytes(
+                        json.dumps(dict(data), indent=4),
+                        encoding="utf-8"
+                    )
+                )
+                zip_file.writestr(file_name, file_str.getvalue())
+
+
+        ui.download(
+            zip_buffer.getvalue(),
+            "search-results.zip"
+        )
+            
+def do_search(search_input, search_results):
     ui.notify('Search Initiated...')
 
     # do some validation
@@ -61,11 +100,11 @@ def do_search(search_input):
         )
 
     res = db.get_meta(**search_input.search_kwargs)
-    print(res)
+    search_results.results = res
     post_table.refresh(res)
     ui.notify("Search Completed!")
     
-def search_form():
+def search_form(search_results):
 
     search_input = SearchInput()
 
@@ -129,7 +168,12 @@ def search_form():
         )
 
         
-    ui.button('Submit').props('type="submit"').on_click(lambda: do_search(search_input))        
+    ui.button('Submit').props('type="submit"').on_click(
+        lambda: do_search(
+            search_input,
+            search_results
+        )
+    )        
 
 def raw_aql_query():
     query = """FOR transient IN transients
@@ -145,30 +189,40 @@ def raw_aql_query():
     ).classes("w-full")
     
 # Function to switch between forms
-def show_form(selected_form, containers=None):
+def show_form(selected_form, search_results, containers=None):
     if containers is not None:
         for val in list(containers)[1:]:
             val.delete()
     if selected_form == 'Search Form':
-        search_form()
+        search_form(search_results)
     elif selected_form == 'AQL Query':
         raw_aql_query()
         
 @ui.page("/search")
 async def search():
+
+    search_results = SearchResults(None)
+
+    partial_show_form = partial(show_form, search_results=search_results)
+    
     with frame():
 
-        ui.label("Search OTTER").classes("text-h4")
-        
+        ui.label("Search OTTER").classes("col-span-5 text-h4")
+            
         # Display the initial
         with ui.grid(rows="40px auto").classes("w-full") as grid:
             selected_tab = ui.toggle(
                 ['Search Form', 'AQL Query'],
                 value='Search Form',
-                on_change=lambda e: show_form(e.value, grid)
+                on_change=lambda e: partial_show_form(e.value, containers=grid)
             ).style("width:20.8%")
             
-            show_form(selected_tab.value)
+            partial_show_form(selected_tab.value)
 
         ui.label("Search Results").classes("text-h4")
         post_table([]) # start with an empty results table
+
+        ui.button(
+            "Download Results",
+            on_click=lambda: search_results.write_results_to_zip()
+        )

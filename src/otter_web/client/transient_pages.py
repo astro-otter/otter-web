@@ -1,3 +1,4 @@
+import json
 from nicegui import ui
 import numpy as np
 import pandas as pd
@@ -31,13 +32,22 @@ def plot_lightcurve(phot, obs_label, fig, plot):
             grp = grp_all[grp_all.converted_flux/grp_all.converted_flux_err > SNR_THRESHOLD]
         else:
             grp = grp_all
+
+        grp["marker"] = grp.apply(
+            lambda row : "triangle-down" if row.upperlimit else "circle",
+            axis = 1
+        )
             
         fig.add_scatter(
             x = grp.converted_date,
             y = grp.converted_flux,
             error_y = dict(array=grp.converted_flux_err),
             name = band,
-            marker = dict(color=mpl.colors.to_hex(c)),
+            marker = dict(
+                color=mpl.colors.to_hex(c),
+                symbol=grp.marker,
+                size=10
+            ),
             mode = 'markers'
         )
 
@@ -145,7 +155,9 @@ def transient_subpage(transient_default_name:str):
 
     db = Otter(url=API_URL)
     meta = db.get_meta(names=transient_default_name)[0]
- 
+    dataset = db.query(names=transient_default_name)[0]
+    json_data = json.dumps(dict(dataset), indent=4)
+    
     phot_types = {}
     obs_types = {
         'radio':'mJy',
@@ -175,8 +187,16 @@ def transient_subpage(transient_default_name:str):
     hasphot = len(phot_types) > 0
     
     with frame():
-        ui.label(f'{transient_default_name}').classes("text-h4")
-
+        with ui.grid(columns=6).classes('w-full gap-0'):
+            ui.label(f'{transient_default_name}').classes("col-span-5 text-h4")
+            ui.button(
+                "Download Dataset",
+                on_click=lambda: ui.download(
+                    bytes(json_data, encoding="utf-8"),
+                    f"{transient_default_name}.json"
+                ).classes("col-span-1")
+            )
+            
         ui.label(f'Properties').classes("text-h6")
         table = generate_property_table(meta)
         
