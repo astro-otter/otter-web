@@ -2,5 +2,8 @@
 Some constant configurations for the website frontend
 '''
 
-API_URL = "http://127.0.0.1:8529"
+# THIS HAS TO BE THIS TO WORK WITH THE DOCKER NETWORK
+# THAT IS WHY THIS BRANCH IS DIFFERENT AND SHOULD
+# REMAIN DIFFERENT (BUT CAUGHT UP WITH) MAIN
+API_URL = "http://otterdb:8529"
 UI_URL = ""
