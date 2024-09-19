@@ -5,5 +5,5 @@ Some constant configurations for the website frontend
 # THIS HAS TO BE THIS TO WORK WITH THE DOCKER NETWORK
 # THAT IS WHY THIS BRANCH IS DIFFERENT AND SHOULD
 # REMAIN DIFFERENT (BUT CAUGHT UP WITH) MAIN
-API_URL = "http://otterdb:8529"
+API_URL = "http://localhost:8529"
 UI_URL = ""
