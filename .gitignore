@@ -52,3 +52,7 @@ MANIFEST
 .venv*/
 .conda*/
 .python-version
+
+# ignore temporary files that are written for vetting
+src/otter_web/tmp
+src/otter_web/tmp/*

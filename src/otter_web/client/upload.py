@@ -1,13 +1,17 @@
+import os
 import io
 import zipfile
 import json
 import re
+import email
+import smtplib
+import uuid
 
 import pandas as pd
 
 from nicegui import ui
 from ..theme import frame
-from ..config import API_URL
+from ..config import API_URL, vetter_emails
 from .home import post_table
 
 from functools import partialmethod, partial
@@ -32,28 +36,32 @@ class UploadInput:
     uploader_name:str = None
     uploader_email:str = None
 
-    # reference info
-    bibcode: str = None
-
     # object metadata
     obj_name: str = None
     ra: str|float = None
     dec: str|float = None
     dec_unit: str = "deg"
     ra_unit: str = None
-
+    coord_bibcode: str = None
+    
     redshift: float = None
+    redshift_bibcode: float = None
     lum_dist: float = None
     lum_dist_unit: str = None
+    lum_dist_bibcode: str = None
     comoving_dist: float = None
     comoving_dist_unit: str = None
+    comoving_dist_bibcode: str = None
     discovery_date: str = None
     discovery_date_format: str = None
+    discovery_date_bibcode: str = None
     proposed_classification: str = None
+    classification_bibcode: str = None
 
     # photometry dataframe
     phot_df : pd.DataFrame = None
-
+    meta_df : pd.DataFrame = None
+    
     # some useful methods
     def __setattr__(self, k, v):
         if v is None or isinstance(v, (str, pd.DataFrame)):
@@ -67,66 +75,66 @@ class UploadInput:
         required_keys = [
             "uploader_name",
             "uploader_email",
-            "bibcode",
             "obj_name",
             "ra",
             "dec",
             "ra_unit",
-            "dec_unit"
+            "dec_unit",
+            "coord_bibcode"
         ]
         required_vals = [getattr(self, k) for k in required_keys]
 
         if None in required_vals:
             for k, v in zip(required_keys, required_vals):
                 if v is None:
-                    ui.notify(f"{k.replace('_', ' ')} is required!")
+                    ui.notify(f"{k.replace('_', ' ')} is required!", type="negative")
             raise InvalidInputError()
 
         # check that conditional values are set
-        if self.lum_dist is not None and self.lum_dist_unit is None:
-            ui.notify(f"luminosity distance units are required if the luminosity distance is provided!")
+        if self.lum_dist is not None and (self.lum_dist_unit is None or self.lum_dist_bibcode is None):
+            ui.notify(f"luminosity distance units and bibcode are required if the luminosity distance is provided!", type="negative")
             raise InvalidInputError()
 
-        if self.comoving_dist is not None and self.comoving_dist_unit is None:
-            ui.notify(f"comoving distance units are required if the comoving distance is provided!")
+        if self.comoving_dist is not None and (self.comoving_dist_unit is None or self.comoving_dist_bibcode is None):
+            ui.notify(f"comoving distance units are required if the comoving distance is provided!", type="negative")
             raise InvalidInputError()
 
-        if self.discovery_date is not None and self.discovery_date_format is None:
-            ui.notify(f"Discovery date format is required if the discovery date is provided!")
+        if self.discovery_date is not None and (self.discovery_date_format is None or self.discovery_date_bibcode is None):
+            ui.notify(f"Discovery date format is required if the discovery date is provided!", type="negative")
             raise InvalidInputError()
 
         # check units
         try:
             u.Unit(self.ra_unit)
         except Exception as e:
-            ui.notify("the provided ra unit is not a valid astropy unit")
+            ui.notify("the provided ra unit is not a valid astropy unit", type="negative")
             raise InvalidInputError() from e
 
         try:
             SkyCoord(self.ra, self.dec, unit=(self.ra_unit, self.dec_unit))
         except Exception as e:
-            ui.notify("Astropy SkyCoord could not parse your ra, dec, and ra unit!")
+            ui.notify("Astropy SkyCoord could not parse your ra, dec, and ra unit!", type="negative")
             raise InvalidInputError() from e
             
         if self.lum_dist is not None:
             try:
                 u.Unit(self.lum_dist_unit)
             except Exception as e:
-                ui.notify("The provided luminosity distance unit is not a valid astropy unit")
+                ui.notify("The provided luminosity distance unit is not a valid astropy unit", type="negative")
                 raise InvalidInputError() from e
         
         if self.comoving_dist is not None:
             try:
                 u.Unit(self.comoving_dist_unit)
             except Exception as e:
-                ui.notify("The provided comoving distance unit is not a valid astropy unit")
+                ui.notify("The provided comoving distance unit is not a valid astropy unit", type="negative")
                 raise InvalidInputError() from e
             
         if self.discovery_date is not None:
             try:
                 Time(self.discovery_date, format=self.discovery_date_form)
             except Exception as e:
-                ui.notify("The discovery date and discovery date format do not match astropy checking!")
+                ui.notify("The discovery date and discovery date format do not match astropy checking!", type="negative")
                 raise InvalidInputError() from e
                 
 
@@ -147,7 +155,7 @@ class UploadInput:
             # address_types=frozenset([IPv4Address, IPv6Address])
         )
         if not is_valid_email:
-            ui.notify("The email address provided is not valid!")
+            ui.notify("The email address provided is not valid!", type="negative")
             raise InvalidInputError()
 
 def validate_and_save_phot(e, save_values):
@@ -159,28 +167,202 @@ def validate_and_save_phot(e, save_values):
         ui.notify("Unable to finish your upload because pandas can't parse this file!")
         raise InvalidInputError()
 
+    # make sure all of the required columns are there
+    required_columns = [
+        "name",
+        "bibcode",
+        "flux",
+        "flux_err",
+        "flux_unit",
+        "date",
+        "date_format",
+        "filter",
+        "filter_eff",
+        "filter_eff_units"
+    ]
+    df.columns = [c.strip() for c in list(df.columns)]
+    atleast_one_missing = False
+    for col in required_columns:
+        if col not in df.columns:
+            ui.notify(f"{col} is required and is missing from your photometry file!", type='negative')
+            atleast_one_missing = True
+
+    if atleast_one_missing:
+        print(df.columns)
+        e.sender.reset()
+        raise InvalidInputError()
+            
     print(df)
     save_values("phot_df", df)
-    
-    
-def add_to_otter(upload_input: UploadInput):
-    upload_input.verify_input()
-    print(str(upload_input))
 
+def validate_and_save_meta(e, save_values):
+
+    text = e.content.read().decode('utf-8')
+
+    try:
+        df = pd.read_csv(io.StringIO(text), sep=',')
+    except Exception as e:
+        ui.notify("Unable to finish your upload because pandas can't parse this file!")
+        raise InvalidInputError()
+
+    required_columns = [
+        "name",
+        "ra",
+        "dec",
+        "ra_unit",
+        "dec_unit",
+        "coord_bibcode"
+    ]
+
+    df.columns = [c.strip() for c in list(df.columns)]
+    atleast_one_missing = False
+    for col in required_columns:
+        if col not in df.columns:
+            ui.notify(f"{col} is required and is missing from your photometry file!", type='negative')
+            atleast_one_missing = True
+
+    if atleast_one_missing:
+        print(df.columns)
+        e.sender.reset()
+        raise InvalidInputError()
+
+    save_values("meta_df", df)
+
+def send_vetting_email(msg_text):
+    """
+    Send an email with the vetting message to everyone listed in the config file as
+    "vetters"
+    """
+    msg = email.message.EmailMessage()
+    msg.set_content(msg_text)
+    
+    msg["Subject"] = "OTTER Vetting Email"
+    msg["From"] = vetter_emails[0]
+    msg["To"] = ", ".join(vetter_emails)
+
+    with smtplib.SMTP('localhost') as s:
+        s.send_message(msg)
+    
+def add_to_otter(upload_input: UploadInput, input_type):
+    if input_type == "single":
+        upload_input.verify_input()
+
+        meta_dict = dict(
+            name = [upload_input.obj_name],
+            ra = [upload_input.ra],
+            dec = [upload_input.dec],
+            ra_unit = [upload_input.ra_unit],
+            dec_unit = [upload_input.dec_unit],
+            coord_bibcode = [upload_input.coord_bibcode]
+        )
+
+        if upload_input.redshift is not None:
+            meta_dict["redshift"] = [upload_input.redshift]
+            meta_dict["redshift_bibcode"] = [upload_input.redshift_bibcode]
+
+        if upload_input.lum_dist is not None:
+            meta_dict["luminosity_distance"] = [upload_input.lum_dist]
+            meta_dict["luminosity_distance_units"] = [upload_input.lum_dist_unit]
+            meta_dict["luminosity_distance_bibcode"] = [upload_input.lum_dist_bibcode]
+
+        if upload_input.comoving_dist is not None:
+            meta_dict["comoving_distance"] = [upload_input.comoving_dist]
+            meta_dict["comoving_distance_units"] = [upload_input.comoving_dist_unit]
+            meta_dict["comoving_distance_bibcode"] = [upload_input.comoving_dist_bibcode]
+            
+        if upload_input.discovery_date is not None:
+            meta_dict["discovery_date"] = [upload_input.discovery_date]
+            meta_dict["discovery_date_format"] = [upload_input.discovery_date_format]
+            meta_dict["discovery_date_bibcode"] = [upload_input.discovery_date_bibcode]
+
+        if upload_input.proposed_classification is not None:
+            meta_dict["classification"] = [upload_input.proposed_classification]
+            meta_dict["classification_bibcode"] = [upload_input.classification_bibcode]
+
+        upload_input.meta_df = pd.DataFrame(meta_dict)
+
+    meta_str_io = io.StringIO()
+    upload_input.meta_df.to_csv(meta_str_io)
+    meta_str = meta_str_io.getvalue()
+
+    phot_str = None
+    if upload_input.phot_df is not None:
+        phot_str_io = io.String()
+        upload_input.phot_df.to_csv(phot_str_io)
+        phot_str = phot_str_io.getvalue()
+
+    vetting_str = f"""
+    Uploader: {upload_input.uploader_name}
+    Uploader Email: {upload_input.uploader_email}
+
+    Metadata Header
+    ---------------
+{upload_input.meta_df.to_string(max_rows=5)}
+
+    Photometry Header
+    -----------------
+{phot_str if phot_str is None else upload_input.phot_df.to_string(max_rows=5)}
+    """
+
+    root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    outpath = os.path.join(root_dir, "tmp", f"{str(uuid.uuid4())}")
+    if not os.path.exists(outpath):
+        os.mkdir(outpath)
+
+    if upload_input.phot_df is not None:
+        upload_input.phot_df.to_csv(os.path.join(outpath, "photometry.csv"))
+    upload_input.meta_df.to_csv(os.path.join(outpath, "meta.csv"))
+    
+    send_vetting_email(vetting_str)
+
+    
 def collect_uploader_info(set_values):
 
     ui.label("Uploader Information").classes("text-h5")
-    ui.input("Name", on_change=partial(set_values, "uploader_name"))
-    ui.input("Email Address", on_change=partial(set_values, "uploader_email"))
+    ui.input("Name*", on_change=partial(set_values, "uploader_name"))
+    ui.input("Email Address*", on_change=partial(set_values, "uploader_email"))
 
-def collect_reference_info(set_values):
+def collect_meta(set_values):
+    meta_instructions = """
+    Please upload your metadata file here. This should have the following required columns:
 
-    ui.label("Citation Information").classes("text-h5")
-    #ui.input("First Author", on_change=partial(set_values, "first_author"))
-    #ui.number("Year Published", on_change=partial(set_values, "year"))
-    #ui.input("Paper Title", on_change=partial(set_values, "title"))
-    ui.input("ADS Bibcode", on_change=partial(set_values, "bibcode"))
+    * `name`: The TDE name, can be TNS or internal
+    * `ra`: The RA of the TDE
+    * `dec`: The dec of the TDE
+    * `ra_unit`: astropy unit string format of the ra
+    * `dec_unit`: astropy unit string format of the dec
+    * `coord_bibcode`: The ADS bibcode associated with the coordinates you are uploading for this object
 
+    Then there are some other optional column keys, please only provide these if you are the one who measured it since your publication will be associated with the measurement in the catalog!
+
+    * `redshift`: The redshift of the TDE
+    * `redshift_bibcode`: The bibcode associated with the redshift you are providing
+    * `luminosity_distance`: The luminosity distance to the TDE
+    * `luminosity_distance_units`: The luminosity distance units required if you give us a luminosity distance
+    * `luminosity_distance_bibcode`: The bibcode associated with the luminosity distance you are providing
+    * `comoving_distance`: The comoving distance to the TDE
+    * `comoving_distance_units`: The comoving distance units, required if you give us a comoving distance
+    * `comoving_distance_bibcode`: The bibcode associated with the comoving distance you are providing
+    * `discovery_date`: The date you discovered the object
+    * `discovery_date_format`: astropy time string format of the discovery date, required if you provide a discovery date
+    * `discovery_date_bibcode`: The bibcode associated with the discovery date you are providing
+    * `classification`: What would you classify this transient as?
+    * `classification_bibcode`: The bibcode associated with the classification of this transient
+    """
+
+    with ui.grid(columns=2):
+        ui.label("Metadata File Upload").classes("text-h5")
+        ui.button(
+        "Download Sample Metadata File",
+        on_click=lambda: ui.download("/static/sample_meta.csv")
+    )
+    
+    ui.markdown(meta_instructions)
+    ui.upload(
+        auto_upload=True,
+        on_upload=lambda e: validate_and_save_meta(e, set_values)
+    ).classes("w-full")
+    
 def collect_photometry(set_values):
 
     phot_instructions = """
@@ -188,12 +370,16 @@ def collect_photometry(set_values):
     This should have the following required columns:
 
     * `name`: The same name that you put in your metadata file
+    * `bibcode`: The ADS bibcode associated with your publication of this photometry
     * `flux`: The flux, fluxdensity, or count rate of the point
+    * `flux_err`: The error on the raw photometry value given.
     * `flux_unit`: The unit on the flux measurement
     * `date`: The date you took this flux measurement
     * `date_format`: The astropy time string format that you used for this date
     * `filter`: The name of the filter that you used to make this measurement
-
+    * `filter_eff`: The effective wavelength or frequency of the filter. We will use the filter_eff_units key to determine this. Please provide this if the filter you used in atypical or obscure, we have a lot of these values already stored but not all of them!
+    * `filter_eff_units`: The units of filter_eff.
+    
     Then there are some columns that are required in some cases:
 
     * `telescope_area`: Collecting area of the telescope. Required if the photometry is given in counts!
@@ -208,7 +394,6 @@ def collect_photometry(set_values):
 
     Then the purely optional columns are:
 
-    * `flux_err`: The error on the raw photometry value given.
     * `date_err`: The error on the date given. 
     * `sigma`: Significance of the upperlimit (if it is an upperlimit).
     * `instrument`: The instrument used to collect this data.
@@ -218,8 +403,6 @@ def collect_photometry(set_values):
     * `observer`: Name of the observer for this point.
     * `reducer`: Name of the person who reduced this data point.
     * `pipeline`: Name and version of the pipeline used to reduce this data.
-    * `filter_eff`: The effective wavelength or frequency of the filter. We will use the filter_eff_units key to determine this. Please provide this if the filter you used in atypical or obscure, we have a lot of these values already stored but not all of them!
-    * `filter_eff_units`: The units of filter_eff.
     * `telescope`: The name of the telescope or observatory. 
     """
     
@@ -242,37 +425,48 @@ def single_object_upload_form():
     set_value = partial(setattr, uploaded_values)
     
     collect_uploader_info(set_value)
-    collect_reference_info(set_value)
 
     # object information
     ui.label("Single Object Information").classes("text-h5")
     ui.label("Required Information").classes("text-h6")
-    ui.input("Name", on_change=partial(set_value, "obj_name"))
-    ui.input("RA", on_change=partial(set_value, "ra"))
-    ui.input("Declination (Degrees)", on_change=partial(set_value, "dec"))
+    ui.input("Name*", on_change=partial(set_value, "obj_name"))
+    ui.input("RA*", on_change=partial(set_value, "ra"))
+    ui.input("Declination (Degrees)*", on_change=partial(set_value, "dec"))
     
     unit_options = ['hourangle', 'degree']
     ui.select(
         unit_options,
-        label = "RA Units",
+        label = "RA Units*",
         on_change = partial(set_value, "ra_unit")
     )
-
-    ui.label("Optional Information (Only if YOU measured it)").classes("text-h6")
+    ui.input("Coordinate Bibcode*", on_change=partial(set_value, "coord_bibcode"))
+    
+    
+    ui.label("Optional Information (Remember to cite the original source as the bibcode!)").classes("text-h6")
     ui.input("Redshift", on_change=partial(set_value, "redshift"))
+    ui.input("Redshift Bibcode", on_change=partial(set_value, "redshift_bibcde"))
+    
     ui.input("Luminosity Distance", on_change=partial(set_value, "lum_dist"))
     ui.input("Luminosity Distance Astropy Unit String", on_change=partial(set_value, "lum_dist_unit"))
+    ui.input("Luminosity Distance Bibcode", on_change=partial(set_value, "lum_dist_bibcode"))
+
     ui.input("Comoving Distance", on_change=partial(set_value, "comoving_dist"))
     ui.input("Comoving Distance Astropy Unit String", on_change=partial(set_value, "comoving_dist_dist"))
+    ui.input("Comoving Distance Bibcode", on_change=partial(set_value, "comoving_dist_bibcode"))
+
     ui.input("Discovery Date", on_change=partial(set_value, "discovery_date"))
     ui.input("Discovery Date Astropy Format String", on_change=partial(set_value, "discovery_date_format"))
-    ui.input("Classification", on_change=partial(set_value, "proposed_classification"))
+    ui.input("Discovery Date Bibcode", on_change=partial(set_value, "discovery_date_bibcode"))
 
+    ui.input("Classification", on_change=partial(set_value, "proposed_classification"))
+    ui.input("Classification Bibcode", on_change=partial(set_value, "classification_bibcode"))
+    
     # photometry
     collect_photometry(set_value)
 
+    partial_add_to_otter = partial(add_to_otter, input_type="single")
     ui.button('Submit').props('type="submit"').on_click(
-        lambda: add_to_otter(
+        lambda: partial_add_to_otter(
             uploaded_values
         )
     )     
@@ -280,9 +474,21 @@ def single_object_upload_form():
     
 def multi_object_upload_form():
 
-    collect_uploader_info()
-    collect_reference_info()
-    
+    uploaded_values = UploadInput()
+    set_value = partial(setattr, uploaded_values)
+
+    collect_uploader_info(set_value)
+
+    collect_meta(set_value)
+    collect_photometry(set_value)
+
+    partial_add_to_otter = partial(add_to_otter, input_type="single")
+    ui.button('Submit').props('type="submit"').on_click(
+        lambda: partial_add_to_otter(
+            uploaded_values
+        )
+    )     
+
 # Function to switch between forms
 def show_form(selected_form, containers=None):
     if containers is not None:
