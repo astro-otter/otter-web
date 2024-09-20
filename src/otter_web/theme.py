@@ -73,7 +73,7 @@ def frame(drawer=None):
     with ui.footer(fixed=False).classes(
         "transparent text-dark border-t flex-center"
     ) as footer:  # "transparent border-t text-dark q-px-md q-mx-md"):
-        ui.label("FOOTER")
+        ui.label("Copyright OTTER 2024")
 
     with ui.column().classes("w-full p-8 lg:p-16 max-w-[1250px] mx-auto"):
         yield
