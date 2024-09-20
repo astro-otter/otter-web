@@ -58,11 +58,11 @@ def frame(drawer=None):
     
             ui.element("q-space")
 
-            with ui.button().props("flat").classes("text-white"):
-                ui.link("Log in", "/").classes(replace="")
+            #with ui.button().props("flat").classes("text-white"):
+            #    ui.link("Log in", "/").classes(replace="")
 
-            with ui.button().props("flat").classes("text-white"):
-                ui.link("Register", "/").classes(replace="")
+            #with ui.button().props("flat").classes("text-white"):
+            #    ui.link("Register", "/").classes(replace="")
 
             ui.separator().props("dark vertical inset").classes("q-mx-sm")
 

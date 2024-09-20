@@ -1,0 +1,3 @@
+[submodule "src/otter_web/otterdb"]
+	path = src/otter_web/otterdb
+	url = https://github.com/astro-otter/otterdb

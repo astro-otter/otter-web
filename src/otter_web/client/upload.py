@@ -11,7 +11,7 @@ import pandas as pd
 
 from nicegui import ui
 from ..theme import frame
-from ..config import API_URL, vetter_emails
+from ..config import API_URL
 from .home import post_table
 
 from functools import partialmethod, partial
@@ -227,23 +227,8 @@ def validate_and_save_meta(e, save_values):
         raise InvalidInputError()
 
     save_values("meta_df", df)
-
-def send_vetting_email(msg_text):
-    """
-    Send an email with the vetting message to everyone listed in the config file as
-    "vetters"
-    """
-    msg = email.message.EmailMessage()
-    msg.set_content(msg_text)
     
-    msg["Subject"] = "OTTER Vetting Email"
-    msg["From"] = vetter_emails[0]
-    msg["To"] = ", ".join(vetter_emails)
-
-    with smtplib.SMTP('localhost') as s:
-        s.send_message(msg)
-    
-def add_to_otter(upload_input: UploadInput, input_type):
+def send_to_vetting(upload_input: UploadInput, input_type):
     if input_type == "single":
         upload_input.verify_input()
 
@@ -281,41 +266,22 @@ def add_to_otter(upload_input: UploadInput, input_type):
 
         upload_input.meta_df = pd.DataFrame(meta_dict)
 
-    meta_str_io = io.StringIO()
-    upload_input.meta_df.to_csv(meta_str_io)
-    meta_str = meta_str_io.getvalue()
-
-    phot_str = None
-    if upload_input.phot_df is not None:
-        phot_str_io = io.String()
-        upload_input.phot_df.to_csv(phot_str_io)
-        phot_str = phot_str_io.getvalue()
-
-    vetting_str = f"""
-    Uploader: {upload_input.uploader_name}
-    Uploader Email: {upload_input.uploader_email}
-
-    Metadata Header
-    ---------------
-{upload_input.meta_df.to_string(max_rows=5)}
-
-    Photometry Header
-    -----------------
-{phot_str if phot_str is None else upload_input.phot_df.to_string(max_rows=5)}
-    """
-
+    dataset_id = str(uuid.uuid4())
     root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    outpath = os.path.join(root_dir, "tmp", f"{str(uuid.uuid4())}")
+    outpath = os.path.join(root_dir, "tmp", f"{dataset_id}")
     if not os.path.exists(outpath):
         os.mkdir(outpath)
 
     if upload_input.phot_df is not None:
         upload_input.phot_df.to_csv(os.path.join(outpath, "photometry.csv"))
     upload_input.meta_df.to_csv(os.path.join(outpath, "meta.csv"))
-    
-    send_vetting_email(vetting_str)
 
-    
+    with open(os.path.join(outpath, "uploader-info.txt"), 'w') as f:
+        f.write(f"{upload_input.uploader_name}\n")
+        f.write(f"{upload_input.uploader_email}")
+
+    ui.navigate.to(f"/upload/{dataset_id}/success")
+        
 def collect_uploader_info(set_values):
 
     ui.label("Uploader Information").classes("text-h5")
@@ -382,9 +348,9 @@ def collect_photometry(set_values):
     
     Then there are some columns that are required in some cases:
 
-    * `telescope_area`: Collecting area of the telescope. Required if the photometry is given in counts!
-    * `min_energy`:
-    * `max_energy`:
+    * `telescope`: Telescope used to take the data. Required if the photometry is X-ray data!
+    * `filter_min`: Minimum frequency or wavelength of the filter used. Required for X-ray data!
+    * `filter_max`: Maximum frequency or wavelength of the filter used. Required for X-ray data!
     * `val_k`: The k-correction value applied. Only required if a k-correction was applied.
     * `val_s`: The s-correction value applied. Required if an s-correction was applied.
     * `val_av`: The value of the applied Milky Way Extinction. Required if the photometry was corrected for Milky Way Extinction.
@@ -403,7 +369,6 @@ def collect_photometry(set_values):
     * `observer`: Name of the observer for this point.
     * `reducer`: Name of the person who reduced this data point.
     * `pipeline`: Name and version of the pipeline used to reduce this data.
-    * `telescope`: The name of the telescope or observatory. 
     """
     
     with ui.grid(columns=2):
@@ -464,9 +429,9 @@ def single_object_upload_form():
     # photometry
     collect_photometry(set_value)
 
-    partial_add_to_otter = partial(add_to_otter, input_type="single")
+    partial_send_to_vetting = partial(send_to_vetting, input_type="single")
     ui.button('Submit').props('type="submit"').on_click(
-        lambda: partial_add_to_otter(
+        lambda: partial_send_to_vetting(
             uploaded_values
         )
     )     
@@ -517,3 +482,59 @@ async def upload():
             ).style("width: 26.25%")
             
             partial_show_form(selected_tab.value)
+
+@ui.page("/upload/{dataset_id}/success")
+def upload_success(dataset_id):
+
+    root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    datapath = os.path.join(root_dir, "tmp", f"{dataset_id}")
+
+    meta_path = os.path.join(datapath, "meta.csv")
+    meta_df = pd.read_csv(meta_path, index_col=0)
+    meta_str = io.StringIO()
+    meta_df.to_markdown(meta_str, index=False, tablefmt="grid")
+    
+    phot_path = os.path.join(datapath, "photometry.csv")
+    phot_df = None
+    if os.path.exists(phot_path):
+        phot_df = pd.read_csv(phot_df)
+
+    phot_str = io.StringIO()
+    if phot_df is not None:
+        phot_df.to_markdown(phot_str, index=False, tablefmt="grid")
+        
+    info_path = os.path.join(datapath, "uploader-info.txt")
+    with open(info_path, "r") as f:
+        lines = f.readlines()
+        
+    with frame():
+        ui.label("Upload Successful!").classes("text-h4")
+
+        msg = f"""
+Your dataset has passed our automated vetting process and has now been sent to
+our team of vetters. If we have any questions we will reach out to you at the
+email you provided.
+
+You should see your data on the OTTER website within ~2 weeks. If you don't
+please reach out to the managers!
+
+Thank you for providing your dataset! A summary is shown below, if anything
+is incorrect please reach out to the OTTER managers.
+
+**Uploader Information**
+
+*Uploader Name*: {lines[0]}
+*Uploader Email*: {lines[1]}
+
+**Metadata**
+
+{meta_str.getvalue()}
+
+**Photometry**
+
+{phot_str.getvalue()}
+
+"""
+        
+        ui.restructured_text(msg)
+        

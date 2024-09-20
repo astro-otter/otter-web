@@ -9,5 +9,11 @@ import os
 API_URL = "http://localhost:8529"
 UI_URL = ""
 
+# a hashmap of page routes that are unrestricted. The only one that shouldn't
+# be in here for now is the vetting page
+unrestricted_page_routes = {'/login', '/', '/search', '/upload', '/upload/*/success'}
+otterpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "otterdb")
+
 # Vetter Emails to send messages to when there is a new otter upload
-vetter_emails = os.environ.get("VETTER_EMAILS", "").split(";")
+vetting_password = os.environ.get("VETTING_PASSWORD", "")
+storage_secret = os.environ.get("STORAGE_SECRET", "")
