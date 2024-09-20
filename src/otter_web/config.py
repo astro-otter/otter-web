@@ -6,7 +6,7 @@ import os
 # THIS HAS TO BE THIS TO WORK WITH THE DOCKER NETWORK
 # THAT IS WHY THIS BRANCH IS DIFFERENT AND SHOULD
 # REMAIN DIFFERENT (BUT CAUGHT UP WITH) MAIN
-API_URL = "http://otterdb:8529"
+API_URL = "http://localhost:8529"
 UI_URL = ""
 
 # a hashmap of page routes that are unrestricted. The only one that shouldn't
