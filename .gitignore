@@ -54,6 +54,6 @@ MANIFEST
 .python-version
 
 # ignore temporary files that are written for vetting
-src/otter_web/tmp
-src/otter_web/tmp/*
+src/otter_web/tmp/*/*.csv
+src/otter_web/tmp/*/*.txt
 .nicegui/*
