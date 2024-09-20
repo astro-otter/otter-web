@@ -103,6 +103,8 @@ def vetting() -> None:
 
         vetting_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
         for upload_data_dir in glob.glob(os.path.join(vetting_dir, "tmp", "*")):
+            if "README.md" in upload_data_dir:
+                continue
             with open(os.path.join(upload_data_dir, "meta.csv"), 'r') as f:
                 n_meta_lines = len(f.readlines()) - 1 # ignore the header row
 
