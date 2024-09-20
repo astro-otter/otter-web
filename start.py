@@ -1,3 +1,8 @@
+import os
+tmpdir = "src/otter_web/tmp"
+if not os.path.exists(tmpdir):
+    os.mkdir(tmpdir)
+
 from nicegui import ui, app
 from otter_web.client import *
 from otter_web.config import *

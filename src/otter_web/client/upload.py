@@ -21,8 +21,6 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.time import Time
 
-from validate_email import validate_email
-
 from otter import Otter
 
 db = Otter(url=API_URL)
