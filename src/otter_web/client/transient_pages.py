@@ -111,8 +111,8 @@ def generate_property_table(meta):
     ]
 
     # get default classification
-    default_class = meta.get_classification()
-    if default_class is not None:
+    try:
+        default_class = meta.get_classification()
         rows.append(
             {
                 'prop': "Default Classification (Our Confidence)",
@@ -120,16 +120,21 @@ def generate_property_table(meta):
             }   
         )
 
+    except KeyError:
+        pass
+
     # get the redshift
-    z = meta.get_redshift()
-    if z is not None:
+    try:
+        z = meta.get_redshift()
         rows.append(
             {
                 'prop': "Redshift",
                 "val": z
             }
         )
-        
+    except KeyError:
+        pass
+    
     # get the discovery date
     try:
         default_disc_date = meta.get_discovery_date()
@@ -139,7 +144,7 @@ def generate_property_table(meta):
                 "val": default_disc_date.iso
             }
         )
-    except:
+    except KeyError:
         pass
     
     table = (
