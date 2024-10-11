@@ -1,5 +1,5 @@
 import json
-from nicegui import ui
+from nicegui import ui, context
 import numpy as np
 import pandas as pd
 
@@ -156,7 +156,7 @@ def generate_property_table(meta):
     return table
     
 @ui.page('/transient/{transient_default_name}')
-def transient_subpage(transient_default_name:str):
+async def transient_subpage(transient_default_name:str):
 
     db = Otter(url=API_URL)
     meta = db.get_meta(names=transient_default_name)[0]
@@ -190,18 +190,50 @@ def transient_subpage(transient_default_name:str):
             pass
 
     hasphot = len(phot_types) > 0
-    
+
+    fov_arcmin = 1.5
+    fov_deg = fov_arcmin / 60
+
     with frame():
-        with ui.grid(columns=6).classes('w-full gap-0'):
-            ui.label(f'{transient_default_name}').classes("col-span-5 text-h4")
-            ui.button(
-                "Download Dataset",
-                on_click=lambda: ui.download(
-                    bytes(json_data, encoding="utf-8"),
-                    f"{transient_default_name}.json"
-                ).classes("col-span-1")
-            )
+
+        with ui.grid(columns=6):
+            with ui.column().classes("align-left col-span-2"):
+                with ui.row():
+                    ui.label(f'{transient_default_name}').classes("text-h4")
+                with ui.row():
+                    ui.button(
+                        "Download Dataset",
+                        on_click=lambda: ui.download(
+                            bytes(json_data, encoding="utf-8"),
+                            f"{transient_default_name}.json"
+                        )
+                    )
+
+            with ui.column().classes("col-span-3"):
+                ui.element("div")
+                    
+            with ui.column().classes("align-right col-span-1"):
+                aladin_parent = ui.element("div")
             
+        # add aladin viewer
+        aladin_viewer = f"""
+        <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
+        <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
+        <script>
+        let aladin;
+        A.init.then( () => {{
+            aladin = A.aladin('#aladin-lite-div', {{survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/', fov:{fov_deg}, target: "{meta.get_skycoord().to_string('hmsdms', sep=':')}"}});
+        }});
+        </script>
+        """
+        ui.add_body_html(aladin_viewer)
+        element = ui.run_javascript(f"""
+        var el = document.getElementById('aladin-lite-div');
+        var parent = document.getElementById('c{aladin_parent.id}');
+        parent.appendChild(el);
+        """)
+        print(element)
+        
         ui.label(f'Properties').classes("text-h6")
         table = generate_property_table(meta)
         

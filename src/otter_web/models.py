@@ -93,11 +93,11 @@ class DistanceCreate(BaseModel):
 
 
 class HostCreate(BaseModel):
-    host_name: Optional[str]
-    host_ra: Optional[Union[float,str]]
-    host_dec: Optional[Union[float,str]]
-    host_ra_units: Optional[str]
-    host_dec_units: Optional[str]
+    host_name: Optional[str] = None
+    host_ra: Optional[Union[float,str]] = None
+    host_dec: Optional[Union[float,str]] = None
+    host_ra_units: Optional[str] = None
+    host_dec_units: Optional[str] = None
 
 
 class TransientCreate(BaseModel):
