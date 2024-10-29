@@ -3,6 +3,8 @@ from nicegui import ui, context
 import numpy as np
 import pandas as pd
 
+from astropy.time import Time
+
 from ..theme import frame
 from ..config import API_URL
 
@@ -16,7 +18,7 @@ from itertools import cycle
 YAXES_IS_REVERSED = False
 SNR_THRESHOLD = 1
 
-def plot_lightcurve(phot, obs_label, fig, plot):
+def plot_lightcurve(phot, obs_label, fig, plot, meta):
 
     fig.data = [] # clear the data from the figure
     
@@ -37,7 +39,12 @@ def plot_lightcurve(phot, obs_label, fig, plot):
             lambda row : "triangle-down" if row.upperlimit else "circle",
             axis = 1
         )
-            
+
+        grp["converted_flux_err"] = grp.apply(
+            lambda row : None if row.upperlimit else row.converted_flux_err,
+            axis = 1
+        )
+        
         fig.add_scatter(
             x = grp.converted_date,
             y = grp.converted_flux,
@@ -59,11 +66,37 @@ def plot_lightcurve(phot, obs_label, fig, plot):
         ylabel = 'Flux Density [uJy]'
     else:
         raise ValueError('Invalid plot label!')
-        
+
+    """
+    disc_date = meta.get_discovery_date().mjd
+    date_range = (
+        max(
+            Time(disc_date - 365*2, format="mjd").iso,
+            phot.converted_date.min()
+        ),
+        min(
+            Time(disc_date + 365+8, format="mjd").iso,
+            phot.converted_date.max()
+        )
+    ) # -2 < t/years < 8
+
+    phot_diff = (phot.converted_flux.max() - phot.converted_flux.min())/10
+    phot_range = (
+        phot.converted_flux.min() - phot_diff,
+        phot.converted_flux.max() + phot_diff
+    )
+    """
+    
     fig.update_layout(
         dict(
-            xaxis = dict(title='Date'),
-            yaxis = dict(title=ylabel)
+            xaxis = dict(
+                title='Date',
+                #range=date_range
+            ),
+            yaxis = dict(
+                title=ylabel,
+                #range=phot_range
+            )
         )
     )
 
@@ -252,11 +285,18 @@ async def transient_subpage(transient_default_name:str):
                     phot_types[e.value],
                     e.value,
                     fig,
-                    plot
+                    plot,
+                    meta
                 )
             )
 
-            plot_lightcurve(phot_types[plot_options[0]], plot_options[0], fig, plot)            
+            plot_lightcurve(
+                phot_types[plot_options[0]],
+                plot_options[0],
+                fig,
+                plot,
+                meta
+            )            
 
             allphot = pd.concat(phot_types.values())
             try:
