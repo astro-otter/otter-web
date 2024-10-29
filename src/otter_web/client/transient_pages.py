@@ -67,35 +67,49 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
     else:
         raise ValueError('Invalid plot label!')
 
-    """
+    # set some date and flux limits to make the plots look a little prettier
     disc_date = meta.get_discovery_date().mjd
     date_range = (
         max(
-            Time(disc_date - 365*2, format="mjd").iso,
-            phot.converted_date.min()
+            Time(disc_date - 365, format="mjd").iso,
+            Time(
+                Time(
+                    phot.converted_date.min(),
+                    format="iso"
+                ).mjd - 10,
+                format="mjd"
+            ).iso
         ),
         min(
-            Time(disc_date + 365+8, format="mjd").iso,
-            phot.converted_date.max()
+            Time(disc_date + 365*8, format="mjd").iso,
+            Time(
+                Time(
+                    phot.converted_date.max(),
+                    format="iso"
+                ).mjd + 10,
+                format="mjd"
+            ).iso
         )
     ) # -2 < t/years < 8
 
-    phot_diff = (phot.converted_flux.max() - phot.converted_flux.min())/10
+    fluxes = phot[~phot.upperlimit].converted_flux
+    outlier_limit = 5*np.std(fluxes)
+    flux_mean = np.mean(fluxes)
     phot_range = (
-        phot.converted_flux.min() - phot_diff,
-        phot.converted_flux.max() + phot_diff
+        max(-1, flux_mean - outlier_limit),
+        flux_mean + outlier_limit
     )
-    """
-    
+
+    # update the axis with labels and ranges
     fig.update_layout(
         dict(
             xaxis = dict(
                 title='Date',
-                #range=date_range
+                range=date_range
             ),
             yaxis = dict(
                 title=ylabel,
-                #range=phot_range
+                range=phot_range
             )
         )
     )
