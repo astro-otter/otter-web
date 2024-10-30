@@ -68,7 +68,17 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
         raise ValueError('Invalid plot label!')
 
     # set some date and flux limits to make the plots look a little prettier
-    disc_date = meta.get_discovery_date().mjd
+    disc_date = meta.get_discovery_date()
+
+    if disc_date is None:
+        # then just use the first detection
+        disc_date = Time(
+            phot[~phot.upperlimit].converted_date.min(),
+            format="iso"
+        ).mjd - 10
+    else:
+        disc_date = disc_date.mjd
+
     date_range = (
         max(
             Time(disc_date - 365, format="mjd").iso,
@@ -113,7 +123,7 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
             )
         )
     )
-
+        
     if obs_label == 'UV/Optical/IR':
         fig.update_yaxes(autorange='reversed')
     if obs_label in {"Radio", "X-Ray"} and fig.layout.yaxis.autorange == 'reversed':
@@ -185,12 +195,14 @@ def generate_property_table(meta):
     # get the discovery date
     try:
         default_disc_date = meta.get_discovery_date()
-        rows.append(
-            {
-                "prop": "Discovery Date",
-                "val": default_disc_date.iso
-            }
-        )
+        if default_disc_date is not None:
+            rows.append(
+                {
+                    "prop": "Discovery Date",
+                    "val": default_disc_date.iso
+                }
+            )
+            
     except KeyError:
         pass
     
