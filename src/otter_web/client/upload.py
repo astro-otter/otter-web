@@ -21,6 +21,8 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.time import Time
 
+from validate_email import validate_email
+
 from otter import Otter
 
 db = Otter(url=API_URL)
@@ -152,7 +154,7 @@ class UploadInput:
             smtp_debug=False,
             # address_types=frozenset([IPv4Address, IPv6Address])
         )
-        if not is_valid_email:
+        if self.uploader_email[-4:] != ".edu" and not is_valid_email:
             ui.notify("The email address provided is not valid!", type="negative")
             raise InvalidInputError()
 
@@ -445,9 +447,9 @@ def multi_object_upload_form():
     collect_meta(set_value)
     collect_photometry(set_value)
 
-    partial_add_to_otter = partial(add_to_otter, input_type="single")
+    partial_send_to_vetting = partial(send_to_vetting, input_type="multi")
     ui.button('Submit').props('type="submit"').on_click(
-        lambda: partial_add_to_otter(
+        lambda: partial_send_to_vetting(
             uploaded_values
         )
     )     
