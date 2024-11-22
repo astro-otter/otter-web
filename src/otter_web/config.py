@@ -8,6 +8,7 @@ import os
 # REMAIN DIFFERENT (BUT CAUGHT UP WITH) MAIN
 API_URL = os.environ.get("ARANGO_URL", "http://localhost:8529")
 UI_URL = ""
+print(API_URL)
 
 # a hashmap of page routes that are unrestricted. The only one that shouldn't
 # be in here for now is the vetting page

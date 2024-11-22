@@ -18,6 +18,11 @@ from astropy import coordinates as coord
 from astropy.time import Time
 from astropy import units as u
 
+import logging
+logger = logging.getLogger(__name__)
+
+
+logger.info(API_URL)
 db = Otter(url=API_URL)
 
 @ui.refreshable
