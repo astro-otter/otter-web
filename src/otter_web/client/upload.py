@@ -266,20 +266,35 @@ def send_to_vetting(upload_input: UploadInput, input_type):
 
         upload_input.meta_df = pd.DataFrame(meta_dict)
 
+    # add the uploader and email as comments to the meta_df
+    upload_input["comment"] = \
+        f"Uploader:{upload_input.uploader_name} | Email:{upload_input.uploader_email}"
+        
     dataset_id = str(uuid.uuid4())
     root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     outpath = os.path.join(root_dir, "tmp", f"{dataset_id}")
     if not os.path.exists(outpath):
         os.mkdir(outpath)
 
+    metapath = os.path.join(outpath, "meta.csv")
+    photpath = os.path.join(outpath, "photometry.csv")
     if upload_input.phot_df is not None:
-        upload_input.phot_df.to_csv(os.path.join(outpath, "photometry.csv"))
-    upload_input.meta_df.to_csv(os.path.join(outpath, "meta.csv"))
+        upload_input.phot_df.to_csv(photpath)
+    upload_input.meta_df.to_csv(metapath)
+    
+    # upload the data to the otter vetting collection
+    local_db = Otter.from_csvs(
+        metafile = metapath,
+        photfile = photpath if os.path.exists(photpath) else None,
+        local_outpath = outpath
+    )
+    local_db.upload(testing=False)
 
-    with open(os.path.join(outpath, "uploader-info.txt"), 'w') as f:
-        f.write(f"{upload_input.uploader_name}\n")
-        f.write(f"{upload_input.uploader_email}")
-
+    os.remove(metapath)
+    if os.path.exists(photpath):
+        os.remove(photpath)
+    os.rmdir(outpath)
+    
     ui.navigate.to(f"/upload/{dataset_id}/success")
         
 def collect_uploader_info(set_values):
