@@ -2,6 +2,7 @@ from typing import Optional
 import glob
 import os
 import io
+import json
 from datetime import datetime
 
 import pandas as pd
@@ -150,8 +151,9 @@ def vetting_subpage(dataset_id):
 **JSON Data**        
 """
         ui.restructured_text(msg)
-        with ui.scroll_area():
-            ui.label(str(t_doc))
+        ui.json_editor(
+            {'content': {'json': t}}
+        ).classes('w-full')
 
 def approve(t):
 

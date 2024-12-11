@@ -234,19 +234,19 @@ def send_to_vetting(upload_input: UploadInput, input_type):
 
         meta_dict = dict(
             name = [upload_input.obj_name],
-            ra = [upload_input.ra],
-            dec = [upload_input.dec],
+            ra = [int(upload_input.ra)],
+            dec = [int(upload_input.dec)],
             ra_unit = [upload_input.ra_unit],
             dec_unit = [upload_input.dec_unit],
             coord_bibcode = [upload_input.coord_bibcode]
         )
 
         if upload_input.redshift is not None:
-            meta_dict["redshift"] = [upload_input.redshift]
+            meta_dict["redshift"] = [int(upload_input.redshift)]
             meta_dict["redshift_bibcode"] = [upload_input.redshift_bibcode]
 
         if upload_input.lum_dist is not None:
-            meta_dict["luminosity_distance"] = [upload_input.lum_dist]
+            meta_dict["luminosity_distance"] = [int(upload_input.lum_dist)]
             meta_dict["luminosity_distance_units"] = [upload_input.lum_dist_unit]
             meta_dict["luminosity_distance_bibcode"] = [upload_input.lum_dist_bibcode]
 
@@ -267,7 +267,7 @@ def send_to_vetting(upload_input: UploadInput, input_type):
         upload_input.meta_df = pd.DataFrame(meta_dict)
 
     # add the uploader and email as comments to the meta_df
-    upload_input["comment"] = \
+    upload_input.meta_df["comment"] = \
         f"Uploader:{upload_input.uploader_name} | Email:{upload_input.uploader_email}"
         
     dataset_id = str(uuid.uuid4())
@@ -288,12 +288,7 @@ def send_to_vetting(upload_input: UploadInput, input_type):
         photfile = photpath if os.path.exists(photpath) else None,
         local_outpath = outpath
     )
-    local_db.upload(testing=False)
-
-    os.remove(metapath)
-    if os.path.exists(photpath):
-        os.remove(photpath)
-    os.rmdir(outpath)
+    local_db.upload_private(testing=False)
     
     ui.navigate.to(f"/upload/{dataset_id}/success")
         
@@ -518,10 +513,6 @@ def upload_success(dataset_id):
     if phot_df is not None:
         phot_df.to_markdown(phot_str, index=False, tablefmt="grid")
         
-    info_path = os.path.join(datapath, "uploader-info.txt")
-    with open(info_path, "r") as f:
-        lines = f.readlines()
-        
     with frame():
         ui.label("Upload Successful!").classes("text-h4")
 
@@ -537,9 +528,6 @@ Thank you for providing your dataset! A summary is shown below, if anything
 is incorrect please reach out to the OTTER managers.
 
 **Uploader Information**
-
-*Uploader Name*: {lines[0]}
-*Uploader Email*: {lines[1]}
 
 **Metadata**
 
