@@ -11,7 +11,7 @@ import pandas as pd
 
 from nicegui import ui
 from ..theme import frame
-from ..config import API_URL
+from ..config import API_URL, vetting_password
 from .home import post_table
 
 from functools import partialmethod, partial
@@ -25,7 +25,7 @@ from validate_email import validate_email
 
 from otter import Otter
 
-db = Otter(url=API_URL)
+db = Otter(url=API_URL, username="vetting-user", password=vetting_password)
 
 class InvalidInputError(Exception):
     pass
@@ -286,7 +286,8 @@ def send_to_vetting(upload_input: UploadInput, input_type):
     local_db = Otter.from_csvs(
         metafile = metapath,
         photfile = photpath if os.path.exists(photpath) else None,
-        local_outpath = outpath
+        local_outpath = outpath,
+        db = db
     )
     local_db.upload_private(testing=False)
     

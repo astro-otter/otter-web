@@ -1,0 +1,2 @@
+,name,alias,ra,dec,refs,hasPhot,hasSpec,json_path
+0,testTDE,['testTDE'],15d00m00s,1d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/testTDE.json
