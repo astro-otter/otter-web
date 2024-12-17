@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 logger.info(API_URL)
+logger.info(f"Opening API server on {API_URL}...")
 db = Otter(url=API_URL)
 
 @ui.refreshable
@@ -64,7 +65,7 @@ def post_table(events:List[dict]) -> None:
         .props("flat")
         .classes("w-full")
     )
-    
+
     for i, event_json in enumerate(events):
         event = TransientRead(**event_json)
         try:

@@ -1,6 +1,7 @@
 import io
 import zipfile
 import json
+import logging
 
 from nicegui import ui
 from ..theme import frame
@@ -15,6 +16,7 @@ from astropy.coordinates import SkyCoord
 from otter import Otter
 
 db = Otter(url=API_URL)
+logger = logging.getLogger(__name__)
 
 class SearchInput:
 
@@ -101,6 +103,7 @@ def do_search(search_input, search_results):
 
     res = db.get_meta(**search_input.search_kwargs)
     search_results.results = res
+    logger.info(res)
     post_table.refresh(res)
     ui.notify("Search Completed!")
     
