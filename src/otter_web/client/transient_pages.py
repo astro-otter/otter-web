@@ -69,13 +69,19 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
 
     # set some date and flux limits to make the plots look a little prettier
     disc_date = meta.get_discovery_date()
-
+    
     if disc_date is None:
-        # then just use the first detection
-        disc_date = Time(
-            phot[~phot.upperlimit].converted_date.min(),
-            format="iso"
-        ).mjd - 10
+        if np.all(phot.upperlimit):
+            disc_date = Time(
+                phot.converted_date.min(),
+                format="iso"
+            ).mjd - 10
+        else:
+            # then just use the first detection
+            disc_date = Time(
+                phot[~phot.upperlimit].converted_date.min(),
+                format="iso"
+            ).mjd - 10
     else:
         disc_date = disc_date.mjd
 

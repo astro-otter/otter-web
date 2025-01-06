@@ -1,6 +1,7 @@
 import pandas as pd
 from nicegui import ui
 from typing import List
+import datetime
 
 from plotly import graph_objects as go
 from plotly.subplots import make_subplots
@@ -57,13 +58,24 @@ def post_table(events:List[dict]) -> None:
         },
         {"name": "ra", "label": "RA", "field": "ra", "sortable": False},
         {"name": "dec", "label": "Dec", "field": "dec", "sortable": False},
-        {"name": "date", "label": "Discovery Date", "field": "date", "sortable": False},
+        {
+            "name": "date",
+            "label": "Discovery Date",
+            "field": "date",
+            "sortable": True, 
+            ":format":"value => (value != '0001-01-01T00:00:00') ? new Date(value).toLocaleString('default', {year: 'numeric', month: 'long', day: 'numeric'}) : 'No Date'"},
     ]
 
     table = (
-        ui.table(columns=columns, rows=[], row_key="id", pagination=10)
-        .props("flat")
-        .classes("w-full")
+        ui.table(
+            columns=columns, rows=[],
+            row_key="id",
+            pagination={
+                'rowsPerPage': 10,
+                'sortBy': 'date',
+                'descending': True
+            }
+        ).props("flat").classes("w-full")
     )
 
     for i, event_json in enumerate(events):
@@ -93,9 +105,9 @@ def post_table(events:List[dict]) -> None:
                 "ra": coord_string.split(" ")[0],
                 "dec": coord_string.split(" ")[1],
                 "date": (
-                    disc_date.strftime("%Y-%m-%d")
+                    disc_date.datetime
                     if disc_date is not None
-                    else "No Date"
+                    else datetime.datetime(1,1,1)
                 ),
             }
         )
