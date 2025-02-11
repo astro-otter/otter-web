@@ -46,6 +46,8 @@ associated with each object you select.
 If (When?) you upload your data to OTTER to make it publicly available and easy to use
 after publishing, please add a citation to OTTER to your paper when describing *how*
 you are making it public.
+
+_Disclaimer:_ We have done our best include every possible citation. But, as you can imagine, this is an extremely difficult task and we will inevitably make mistakes and miss papers. If you don't see a paper cited in OTTER, please reach out the developers and they will see to it that it gets appropriately added!
         """).style("font-size:150%;")
 
         ui.label(
