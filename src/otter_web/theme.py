@@ -50,10 +50,13 @@ def frame(drawer=None):
 
             with ui.button().props("flat").classes("text-white"):
                 ui.link("Upload Data", "/upload").classes(replace="")
+
+            with ui.button().props("flat").classes("text-white"):
+                ui.link("Citing Us", "/citing").classes(replace="")
                 
             with ui.button().props("flat").classes("text-white"):
                 ui.link(
-                    "Documentation", "https://astro-otter.readthedocs.io"
+                    "API Documentation", "https://astro-otter.readthedocs.io"
                 ).classes(replace="")
     
             ui.element("q-space")
