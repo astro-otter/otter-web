@@ -3,7 +3,7 @@ import zipfile
 import json
 import logging
 
-from nicegui import ui
+from nicegui import ui, events
 from ..theme import frame
 from ..config import API_URL
 from .home import post_table
@@ -69,7 +69,7 @@ class SearchResults:
             zip_buffer.getvalue(),
             "search-results.zip"
         )
-            
+        
 def do_search(search_input, search_results):
     ui.notify('Search Initiated...')
 
@@ -106,6 +106,17 @@ def do_search(search_input, search_results):
     logger.info(res)
     post_table.refresh(res)
     ui.notify("Search Completed!")
+
+def submit_form_with_enter(
+        event:events.KeyEventArguments,
+        search_input,
+        search_results
+) -> None:
+    if event.key.enter and event.action.keydown:
+        do_search(
+            search_input,
+            search_results
+        )
     
 def search_form(search_results):
 
@@ -176,7 +187,16 @@ def search_form(search_results):
             search_input,
             search_results
         )
-    )        
+    )
+
+    ui.keyboard(
+        on_key=lambda e: submit_form_with_enter(
+            e,
+            search_input,
+            search_results
+        ),
+        ignore = ["select", "button", "textarea"]
+    )
 
 def raw_aql_query():
     query = """FOR transient IN transients
