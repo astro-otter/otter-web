@@ -12,7 +12,7 @@ db = Otter(url=API_URL)
 
 CHECKBOXES = {}
 
-@ui.page(os.path.join(WEB_BASE_URL, "/citing"))
+@ui.page(os.path.join(WEB_BASE_URL, "citing"))
 async def citing_us_page():
 
     with frame():

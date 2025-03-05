@@ -11,7 +11,13 @@ WEB_BASE_URL = os.environ.get("OTTER_WEB_BASE_URL", "/")
 
 # a hashmap of page routes that are unrestricted. The only one that shouldn't
 # be in here for now is the vetting page
-unrestricted_page_routes = {'/login', '/', '/search', '/upload', '/upload/*/success'}
+unrestricted_page_routes = {
+    os.path.join(WEB_BASE_URL, '/login'),
+    os.path.join(WEB_BASE_URL, '/'),
+    os.path.join(WEB_BASE_URL, '/search'),
+    os.path.join(WEB_BASE_URL, '/upload'),
+    os.path.join(WEB_BASE_URL, '/upload/*/success')
+}
 otterpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "otterdb")
 
 # Vetter Emails to send messages to when there is a new otter upload

@@ -1,3 +1,5 @@
+import os
+from .config import WEB_BASE_URL
 from contextlib import contextmanager
 from pathlib import Path
 from nicegui import ui, app
@@ -31,7 +33,7 @@ def frame(drawer=None):
                 ui.image(source="/static/logo.png").classes("text-white").style(
                     "width: 50px; margin:5px"
                 )
-                ui.link("OTTER", "/").classes(replace="").style(
+                ui.link("OTTER", WEB_BASE_URL).classes(replace="").style(
                     "font-weight: bold; padding-left: 5px"
                 )
 
@@ -43,16 +45,16 @@ def frame(drawer=None):
                 ui.separator().props("dark vertical inset").classes("q-mr-sm")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Catalog", "/").classes(replace="")
+                ui.link("Catalog", WEB_BASE_URL).classes(replace="")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Search", "/search").classes(replace="")
+                ui.link("Search", os.path.join(WEB_BASE_URL, "search")).classes(replace="")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Upload Data", "/upload").classes(replace="")
+                ui.link("Upload Data", os.path.join(WEB_BASE_URL,"upload")).classes(replace="")
 
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Citing Us", "/citing").classes(replace="")
+                ui.link("Citing Us", os.path.join(WEB_BASE_URL, "citing")).classes(replace="")
                 
             with ui.button().props("flat").classes("text-white"):
                 ui.link(

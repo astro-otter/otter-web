@@ -39,7 +39,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(AuthMiddleware)
 
-@ui.page(os.path.join(WEB_BASE_URL, '/vetting'))
+@ui.page(os.path.join(WEB_BASE_URL, 'vetting'))
 def vetting() -> None:
     def logout() -> None:
         app.storage.user.clear()
@@ -110,7 +110,7 @@ def vetting() -> None:
         with ui.column().classes('absolute-center items-center'):
             ui.button(on_click=logout, icon='logout').props('outline round')
 
-@ui.page(os.path.join(WEB_BASE_URL, "/vetting/{dataset_id}"))
+@ui.page(os.path.join(WEB_BASE_URL, "vetting/{dataset_id}"))
 def vetting_subpage(dataset_id):
 
     conn = Connection(

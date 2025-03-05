@@ -222,7 +222,7 @@ def show_form(selected_form, search_results, containers=None):
     elif selected_form == 'AQL Query':
         raw_aql_query()
         
-@ui.page(os.path.join(WEB_BASE_URL, "/search"))
+@ui.page(os.path.join(WEB_BASE_URL, "search"))
 async def search():
 
     search_results = SearchResults(None)
