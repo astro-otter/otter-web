@@ -7,7 +7,7 @@ from plotly import graph_objects as go
 from plotly.subplots import make_subplots
 
 from ..theme import frame
-from ..config import API_URL
+from ..config import API_URL, WEB_BASE_URL
 from ..models import TransientRead
 
 from .transient_pages import *
@@ -208,7 +208,7 @@ def skymap(fig, tdes):
 
     return fig
 
-@ui.page("/")
+@ui.page(f"{WEB_BASE_URL}")
 async def page():
     with frame():
         imsize=32

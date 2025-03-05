@@ -1,9 +1,10 @@
+import os
 import numpy as np
 import ads
 
 from nicegui import ui
 from ..theme import frame
-from ..config import API_URL
+from ..config import API_URL, WEB_BASE_URL
 
 from otter import Otter, Transient
 
@@ -11,7 +12,7 @@ db = Otter(url=API_URL)
 
 CHECKBOXES = {}
 
-@ui.page("/citing")
+@ui.page(os.path.join(WEB_BASE_URL, "/citing"))
 async def citing_us_page():
 
     with frame():

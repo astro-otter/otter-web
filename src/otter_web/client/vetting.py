@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from ..config import vetting_password, unrestricted_page_routes, otterpath, API_URL
+from ..config import vetting_password, unrestricted_page_routes, otterpath, API_URL, WEB_BASE_URL
 from ..theme import frame
 
 from otter import Otter
@@ -39,7 +39,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(AuthMiddleware)
 
-@ui.page('/vetting')
+@ui.page(os.path.join(WEB_BASE_URL, '/vetting'))
 def vetting() -> None:
     def logout() -> None:
         app.storage.user.clear()
@@ -110,7 +110,7 @@ def vetting() -> None:
         with ui.column().classes('absolute-center items-center'):
             ui.button(on_click=logout, icon='logout').props('outline round')
 
-@ui.page("/vetting/{dataset_id}")
+@ui.page(os.path.join(WEB_BASE_URL, "/vetting/{dataset_id}"))
 def vetting_subpage(dataset_id):
 
     conn = Connection(
@@ -190,7 +190,7 @@ def reject(dataset_id):
 def download_dataset(t, dataset_id):
     ui.download(bytes(t), f"{dataset_id}.csv")
         
-@ui.page('/login')
+@ui.page(os.path.join(WEB_BASE_URL, '/login'))
 def login() -> Optional[RedirectResponse]:
     def try_login() -> None:  # local function to avoid passing username and password as arguments
         if passwords.get(username.value) == password.value:

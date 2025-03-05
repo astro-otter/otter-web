@@ -1,3 +1,4 @@
+import os
 import io
 import zipfile
 import json
@@ -5,7 +6,7 @@ import logging
 
 from nicegui import ui, events
 from ..theme import frame
-from ..config import API_URL
+from ..config import API_URL, WEB_BASE_URL
 from .home import post_table
 
 from functools import partialmethod, partial
@@ -221,7 +222,7 @@ def show_form(selected_form, search_results, containers=None):
     elif selected_form == 'AQL Query':
         raw_aql_query()
         
-@ui.page("/search")
+@ui.page(os.path.join(WEB_BASE_URL, "/search"))
 async def search():
 
     search_results = SearchResults(None)

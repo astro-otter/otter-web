@@ -1,3 +1,4 @@
+import os
 import json
 from nicegui import ui, context
 import numpy as np
@@ -6,7 +7,7 @@ import pandas as pd
 from astropy.time import Time
 
 from ..theme import frame
-from ..config import API_URL
+from ..config import API_URL, WEB_BASE_URL
 
 from otter import Otter
 from otter.exceptions import FailedQueryError
@@ -220,7 +221,7 @@ def generate_property_table(meta):
     
     return table
     
-@ui.page('/transient/{transient_default_name}')
+@ui.page(os.path.join(WEB_BASE_URL, '/transient/{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
     db = Otter(url=API_URL)

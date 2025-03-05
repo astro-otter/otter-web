@@ -11,7 +11,7 @@ import pandas as pd
 
 from nicegui import ui
 from ..theme import frame
-from ..config import API_URL, vetting_password
+from ..config import API_URL, vetting_password, WEB_BASE_URL
 from .home import post_table
 
 from functools import partialmethod, partial
@@ -475,7 +475,7 @@ def show_form(selected_form, containers=None):
     elif selected_form == 'Multiple Objects':
         multi_object_upload_form()
         
-@ui.page("/upload")
+@ui.page(os.path.join(WEB_BASE_URL, "/upload"))
 async def upload():
 
     partial_show_form = partial(show_form)
@@ -494,7 +494,7 @@ async def upload():
             
             partial_show_form(selected_tab.value)
 
-@ui.page("/upload/{dataset_id}/success")
+@ui.page(os.path.join(WEB_BASE_URL, "/upload/{dataset_id}/success"))
 def upload_success(dataset_id):
 
     root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
