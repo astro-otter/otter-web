@@ -220,8 +220,8 @@ def generate_property_table(meta):
     )
     
     return table
-    
-@ui.page(os.path.join(WEB_BASE_URL, 'transient/{transient_default_name}'))
+
+@ui.page(os.path.join(WEB_BASE_URL, 'transient', '{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
     db = Otter(url=API_URL)

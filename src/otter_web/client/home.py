@@ -116,7 +116,16 @@ def post_table(events:List[dict]) -> None:
         'body-cell-title',
         r'<td><a :href="props.row.url">{{ props.row.title }}</a></td>'
     )
-    table.on('rowClick', lambda e : ui.navigate.to(f'/transient/{e.args[1]["name"]}'))
+    table.on(
+        'rowClick',
+        lambda e : ui.navigate.to(
+            os.path.join(
+                WEB_BASE_URL,
+                'transient',
+                f'{e.args[1]["name"]}'
+            )
+        )
+    )
 
 def skymap(fig, tdes):
     '''

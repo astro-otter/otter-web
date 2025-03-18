@@ -43,7 +43,7 @@ app.add_middleware(AuthMiddleware)
 def vetting() -> None:
     def logout() -> None:
         app.storage.user.clear()
-        ui.navigate.to('/')
+        ui.navigate.to(WEB_BASE_URL)
 
     with frame():
 
@@ -105,7 +105,15 @@ def vetting() -> None:
             'body-cell-title',
             r'<td><a :href="props.row.url">{{ props.row.title }}</a></td>'
         )
-        table.on('rowClick', lambda e : ui.navigate.to(f'/{e.args[1]["dataset_id"]}'))
+        table.on(
+            'rowClick',
+            lambda e : ui.navigate.to(
+                os.path.join(
+                    WEB_BASE_URL,
+                    '{e.args[1]["dataset_id"]}'
+                )
+            )
+        )
             
         with ui.column().classes('absolute-center items-center'):
             ui.button(on_click=logout, icon='logout').props('outline round')
@@ -176,7 +184,7 @@ def approve(t):
         return
     
     ui.notify("Data was successfully processed!")
-    ui.navigate.to("/vetting")
+    ui.navigate.to(os.path.join(WEB_BASE_URL, "vetting"))
     
 def reject(dataset_id):
 
@@ -184,7 +192,7 @@ def reject(dataset_id):
     t_doc = db.fetchDocument(f"vetting/{dataset_id}")
     t_doc.delete()
     
-    ui.navigate.to("/vetting")
+    ui.navigate.to(os.path.join(WEB_BASE_URL, "vetting"))
     ui.notify("Rejection successful!", type="positive")
     
 def download_dataset(t, dataset_id):

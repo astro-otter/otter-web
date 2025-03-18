@@ -291,7 +291,7 @@ def send_to_vetting(upload_input: UploadInput, input_type):
     )
     local_db.upload_private(testing=False)
     
-    ui.navigate.to(f"/upload/{dataset_id}/success")
+    ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
         
 def collect_uploader_info(set_values):
 
