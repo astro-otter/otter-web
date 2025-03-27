@@ -1,4 +1,4 @@
-import sys
+import os, sys
 
 if sys.version_info[:2] >= (3, 8):
     # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
@@ -20,3 +20,6 @@ from pathlib import Path
 
 app.add_static_files("/static", str(Path(__file__).parent / "static"))
 app.add_static_files("/tmp", str(Path(__file__).parent / "tmp"))
+app.root_path = os.environ.get("OTTER_WEB_BASE_URL", "/")
+
+print(f"The app.route_path is set to {app.root_path}")

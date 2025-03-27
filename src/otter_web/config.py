@@ -7,7 +7,8 @@ import os
 # THAT IS WHY THIS BRANCH IS DIFFERENT AND SHOULD
 # REMAIN DIFFERENT (BUT CAUGHT UP WITH) MAIN
 API_URL = os.environ.get("ARANGO_URL", "http://localhost:8529")
-WEB_BASE_URL = os.environ.get("OTTER_WEB_BASE_URL", "/")
+WEB_BASE_URL = "/"
+print(f"The WEB_BASE_URL for the app is set to {WEB_BASE_URL}")
 
 # a hashmap of page routes that are unrestricted. The only one that shouldn't
 # be in here for now is the vetting page

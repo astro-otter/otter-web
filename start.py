@@ -9,9 +9,8 @@ from nicegui import ui, app
 from otter_web.client import *
 from otter_web.config import *
 
-
 def main():
-
+    
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--on-air",
@@ -26,9 +25,10 @@ def main():
     ui.run(
         title = 'OTTER', # sets the title of the tab
         favicon = 'src/otter_web/static/logo.png',
-        dark = None, # inherits dark mode from the computer settings
+        dark = False, # inherits dark mode from the computer settings
         storage_secret = storage_secret,
-        on_air = args.on_air
+        on_air = args.on_air,
+        #root_path = ROOT_PATH
     )
 
 if __name__ in {"__main__", "__mp_main__"}:
