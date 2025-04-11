@@ -27,8 +27,7 @@ logger.info(API_URL)
 logger.info(f"Opening API server on {API_URL}...")
 db = Otter(url=API_URL)
 
-@ui.refreshable
-def post_table(events:List[dict]) -> None:
+def _post_table(events:List[dict]) -> None:
     columns = [
         {
             "name": "id",
@@ -219,6 +218,10 @@ def skymap(fig, tdes):
 
 @ui.page(f"{WEB_BASE_URL}")
 async def page():
+    @ui.refreshable
+    def post_table(*args, **kwargs):
+        _post_table(*args, **kwargs)
+
     with frame():
         imsize=32
         with ui.grid(rows=1, columns=16).classes("gap-0 no-wrap"):

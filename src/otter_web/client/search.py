@@ -7,7 +7,7 @@ import logging
 from nicegui import ui, events
 from ..theme import frame
 from ..config import API_URL, WEB_BASE_URL
-from .home import post_table
+from .home import _post_table
 
 from functools import partialmethod, partial
 from dataclasses import dataclass
@@ -71,7 +71,7 @@ class SearchResults:
             "search-results.zip"
         )
         
-def do_search(search_input, search_results):
+def do_search(search_input, search_results, post_table):
     ui.notify('Search Initiated...')
 
     # do some validation
@@ -111,15 +111,17 @@ def do_search(search_input, search_results):
 def submit_form_with_enter(
         event:events.KeyEventArguments,
         search_input,
-        search_results
+        search_results,
+        post_table
 ) -> None:
     if event.key.enter and event.action.keydown:
         do_search(
             search_input,
-            search_results
+            search_results,
+            post_table
         )
     
-def search_form(search_results):
+def search_form(search_results, post_table):
 
     search_input = SearchInput()
 
@@ -186,7 +188,8 @@ def search_form(search_results):
     ui.button('Submit').props('type="submit"').on_click(
         lambda: do_search(
             search_input,
-            search_results
+            search_results,
+            post_table
         )
     )
 
@@ -194,12 +197,13 @@ def search_form(search_results):
         on_key=lambda e: submit_form_with_enter(
             e,
             search_input,
-            search_results
+            search_results,
+            post_table
         ),
         ignore = ["select", "button", "textarea"]
     )
 
-def raw_aql_query():
+def raw_aql_query(post_table):
     query = """FOR transient IN transients
     RETURN transient
         """
@@ -213,21 +217,29 @@ def raw_aql_query():
     ).classes("w-full")
     
 # Function to switch between forms
-def show_form(selected_form, search_results, containers=None):
+def show_form(selected_form, search_results, post_table, containers=None):
     if containers is not None:
         for val in list(containers)[1:]:
             val.delete()
     if selected_form == 'Search Form':
-        search_form(search_results)
+        search_form(search_results, post_table)
     elif selected_form == 'AQL Query':
-        raw_aql_query()
+        raw_aql_query(post_table)
         
 @ui.page(os.path.join(WEB_BASE_URL, "search"))
 async def search():
 
+    @ui.refreshable
+    def post_table(*args, **kwargs):
+        _post_table(*args, **kwargs)
+    
     search_results = SearchResults(None)
 
-    partial_show_form = partial(show_form, search_results=search_results)
+    partial_show_form = partial(
+        show_form,
+        search_results=search_results,
+        post_table=post_table
+    )
     
     with frame():
 

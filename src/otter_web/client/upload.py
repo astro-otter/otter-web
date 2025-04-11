@@ -12,7 +12,6 @@ import pandas as pd
 from nicegui import ui
 from ..theme import frame
 from ..config import API_URL, vetting_password, WEB_BASE_URL
-from .home import post_table
 
 from functools import partialmethod, partial
 from dataclasses import dataclass
