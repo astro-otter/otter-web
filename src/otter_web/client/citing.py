@@ -134,7 +134,17 @@ def generate_bibtex_file():
         all_bibcodes += bibcodes
 
     all_bibcodes = np.unique(all_bibcodes)
-    bibtex = ads.ExportQuery(bibcodes=list(all_bibcodes)).execute()
+    try:
+        bibtex = ads.ExportQuery(bibcodes=list(all_bibcodes)).execute()
+    except ads.exceptions.APIResponseError as exc:
+        ui.notify(f"""
+        The ADS API responded with an error! We recommend limiting the number of
+        citations you are attempting to download. The error message is: \n
+        {exc}
+        """,
+        position="center",
+        type="negative"
+    )
         
     return bibtex.encode("utf-8")
     
