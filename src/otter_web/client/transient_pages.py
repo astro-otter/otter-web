@@ -61,10 +61,13 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
 
     if obs_label == 'Radio':
         ylabel = 'Flux Density [mJy]'
+        yaxis_type = "log"
     elif obs_label == 'UV/Optical/IR':
         ylabel = 'AB Magnitude'
+        yaxis_type = "linear"
     elif obs_label == 'X-Ray':
         ylabel = 'Flux Density [uJy]'
+        yaxis_type = "log"
     else:
         raise ValueError('Invalid plot label!')
 
@@ -85,25 +88,24 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
             ).mjd - 10
     else:
         disc_date = disc_date.mjd
-
     date_range = (
         max(
-            Time(disc_date - 365, format="mjd").iso,
+            Time(disc_date - 2*365, format="mjd").iso,
             Time(
-                Time(
-                    phot.converted_date.min(),
+                min(Time(
+                    phot.converted_date.astype(str).tolist(),
                     format="iso"
-                ).mjd - 10,
+                )).mjd - 50,
                 format="mjd"
             ).iso
         ),
         min(
             Time(disc_date + 365*8, format="mjd").iso,
             Time(
-                Time(
-                    phot.converted_date.max(),
+                max(Time(
+                    phot.converted_date.astype(str).tolist(),
                     format="iso"
-                ).mjd + 10,
+                )).mjd + 50,
                 format="mjd"
             ).iso
         )
@@ -112,10 +114,16 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
     fluxes = phot[~phot.upperlimit].converted_flux
     outlier_limit = 5*np.std(fluxes)
     flux_mean = np.mean(fluxes)
-    phot_range = (
-        max(-1, flux_mean - outlier_limit),
-        flux_mean + outlier_limit
-    )
+    if yaxis_type == "log":
+        phot_range = (
+            max(0, flux_mean - outlier_limit),
+            np.log10(flux_mean + outlier_limit)
+        )
+    else:
+        phot_range = (
+            max(-1, flux_mean - outlier_limit),
+            flux_mean + outlier_limit
+        )
 
     # update the axis with labels and ranges
     fig.update_layout(
@@ -126,8 +134,9 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
             ),
             yaxis = dict(
                 title=ylabel,
-                range=phot_range
-            )
+                range=phot_range,
+                type=yaxis_type
+            ),
         )
     )
         
