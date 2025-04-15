@@ -17,7 +17,8 @@ unrestricted_page_routes = {
     os.path.join(WEB_BASE_URL, '/'),
     os.path.join(WEB_BASE_URL, '/search'),
     os.path.join(WEB_BASE_URL, '/upload'),
-    os.path.join(WEB_BASE_URL, '/upload/*/success')
+    os.path.join(WEB_BASE_URL, '/upload/*/success'),
+    os.path.join(WEB_BASE_URL, '/api')
 }
 otterpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "otterdb")
 

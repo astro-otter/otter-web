@@ -22,13 +22,13 @@ def main():
     if args.on_air:
         args.on_air = os.environ.get("NICEGUI_ON_AIR_TOKEN", True)
 
+    app.include_router(API_ROUTER)
     ui.run(
         title = 'OTTER', # sets the title of the tab
         favicon = 'src/otter_web/static/logo.png',
         dark = False, # inherits dark mode from the computer settings
         storage_secret = storage_secret,
-        on_air = args.on_air,
-        #root_path = ROOT_PATH
+        on_air = args.on_air
     )
 
 if __name__ in {"__main__", "__mp_main__"}:

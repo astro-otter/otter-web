@@ -48,8 +48,8 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
         
         fig.add_scatter(
             x = grp.converted_date,
-            y = grp.converted_flux,
-            error_y = dict(array=grp.converted_flux_err),
+            y = grp.converted_flux.astype(float),
+            error_y = dict(array=grp.converted_flux_err.astype(float)),
             name = band,
             marker = dict(
                 color=mpl.colors.to_hex(c),
