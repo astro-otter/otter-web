@@ -383,16 +383,16 @@ async def transient_subpage(transient_default_name:str):
                 obs_type = obs_type
             )
             phot_types[label_map[obs_type]] = phot
+
+            allphot = db.get_phot(
+                names = transient_default_name,
+                flux_unit = "Jy",
+                date_unit = "mjd",
+                return_type = "pandas"
+            )
             
         except FailedQueryError:
             pass
-
-    allphot = db.get_phot(
-        names = transient_default_name,
-        flux_unit = "Jy",
-        date_unit = "mjd",
-        return_type = "pandas"
-    )
         
     hasphot = len(phot_types) > 0
 
