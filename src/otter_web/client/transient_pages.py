@@ -18,6 +18,7 @@ from itertools import cycle
 
 YAXES_IS_REVERSED = False
 SNR_THRESHOLD = 1
+ADS_BASE_URL = "https://ui.adsabs.harvard.edu/abs/"
 
 def plot_lightcurve(phot, obs_label, fig, plot, meta):
 
@@ -164,7 +165,7 @@ def generate_property_table(meta):
             "required": True,
             "sortable": False,
             "align": "left"
-        }
+        },
     ]
 
     rows = [
@@ -173,13 +174,13 @@ def generate_property_table(meta):
             'prop': 'Aliases',
             'val': "; ".join(
                 [f'{i["value"]}' for i in meta['name']['alias']]
-            )
+            ),
         },
 
         # give coordinates
         {
             'prop': 'Coordinate',
-            'val': meta.get_skycoord().to_string("hmsdms") 
+            'val': meta.get_skycoord().to_string("hmsdms"),
         }
     ]
 
@@ -341,11 +342,21 @@ async def transient_subpage(transient_default_name:str):
             )            
 
             allphot = pd.concat(phot_types.values())
-            try:
-                phot_refs = ", ".join(
-                    allphot.human_readable_refs.unique()
-                )
-                ui.label(f'Photometry Sources: {phot_refs}')
-            except:
-                print(allphot.human_readable_refs)
-                ui.label(f'Photometry Sources: ERROR DISPLAYING!')
+
+            all_phot_refs = []
+            all_phot_hrns = []
+            for ref, hrn in zip(allphot.reference, allphot.human_readable_refs):
+                if isinstance(ref, list):
+                    all_phot_refs += ref
+                else:
+                    all_phot_refs.append(ref)
+                if isinstance(hrn, list):
+                    all_phot_hrns += hrn
+                else:
+                    all_phot_hrns.append(hrn)
+
+            ui.label(f'Photometry Sources:')
+            with ui.list().props('dense'):
+                for bibcode in np.unique(all_phot_refs):
+                    with ui.item():
+                        ui.link(bibcode, f"{ADS_BASE_URL}{bibcode}")
