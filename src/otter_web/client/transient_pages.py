@@ -20,6 +20,11 @@ YAXES_IS_REVERSED = False
 SNR_THRESHOLD = 1
 ADS_BASE_URL = "https://ui.adsabs.harvard.edu/abs/"
 
+DELTA_T = 10
+MIN_T = 0
+MAX_T = None
+XAXIS = "Frequency [GHz]"
+
 def plot_lightcurve(phot, obs_label, fig, plot, meta):
 
     fig.data = [] # clear the data from the figure
@@ -148,6 +153,99 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
         
     plot.update()
 
+def plot_sed(phot, fig, plot, meta):
+
+    global DELTA_T
+    dt = DELTA_T
+
+    global MIN_T
+    start_time = MIN_T
+
+    global MAX_T
+    end_time = MAX_T
+
+    global XAXIS
+    xaxis = XAXIS
+    
+    fig.data = [] # clear the data from the figure
+    
+    disc_date = meta.get_discovery_date()
+    if disc_date is None:
+        disc_date = phot.converted_date.min()
+    else:
+       disc_date = disc_date.mjd     
+    phot["dt"] = phot.converted_date.astype(float) - disc_date
+
+    if end_time is None:
+        end_time = phot.dt.max()
+    
+    max_t = min(phot.dt.max(), end_time)
+    min_t = max(phot.dt.min(), start_time)
+    
+    cmap = mpl.colormaps['jet']
+    n_lines = int((max_t - min_t) // dt)
+    colors = cmap(np.linspace(0, 1, n_lines))
+    
+    color_idx = 0 
+    curr_time = start_time
+
+    if xaxis == "Frequency [GHz]":
+        xaxis_key = "converted_freq"
+    elif xaxis == "Wavelength [nm]":
+        xaxis_key = "converted_wave"
+
+    while curr_time+dt < max_t:
+        c = colors[color_idx]
+
+        grp = phot[(phot.dt >= curr_time) * (phot.dt < curr_time+dt)]
+        if len(grp) == 0:
+            curr_time += dt
+            continue
+
+        grp["marker"] = grp.apply(
+            lambda row : "triangle-down" if row.upperlimit else "circle",
+            axis = 1
+        )
+
+        grp["converted_flux_err"] = grp.apply(
+            lambda row : None if row.upperlimit else row.converted_flux_err,
+            axis = 1
+        )
+        
+        fig.add_scatter(
+            x = grp[xaxis_key].astype(float),
+            y = grp.converted_flux.astype(float),
+            error_y = dict(array=grp.converted_flux_err.astype(float)),
+            name = f"{curr_time}-{curr_time+dt}",
+            marker = dict(
+                color=mpl.colors.to_hex(c),
+                symbol=grp.marker,
+                size=10
+            ),
+            mode = 'markers'
+        )
+
+        curr_time += dt
+        color_idx += 1
+
+    exp_form = "power"
+    fig.update_layout(
+        dict(
+            xaxis = dict(
+                title=XAXIS,
+                type = "log",
+                exponentformat  = exp_form
+            ),
+            yaxis = dict(
+                title="Flux Density [Jy]",
+                type="log",
+                exponentformat = exp_form
+            ),
+        )
+    )
+
+    plot.update()
+        
 def generate_property_table(meta):
     columns = [
         {
@@ -231,9 +329,33 @@ def generate_property_table(meta):
     
     return table
 
+def _update_global_delta_t(new_delta_t, *args, **kwargs):
+    global DELTA_T
+    DELTA_T = new_delta_t
+    plot_sed(*args, **kwargs)
+
+def _update_global_min_t(new_min_t, *args, **kwargs):
+    global MIN_T
+    MIN_T = new_min_t
+    plot_sed(*args, **kwargs)
+
+def _update_global_max_t(new_max_t, *args, **kwargs):
+    global MAX_T
+    MAX_T = new_max_t
+    plot_sed(*args, **kwargs)
+
+def _update_global_xaxis(new_xaxis, *args, **kwargs):
+    global XAXIS
+    XAXIS = new_xaxis
+    plot_sed(*args, **kwargs)
+    
 @ui.page(os.path.join(WEB_BASE_URL, 'transient', '{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
+    global DELTA_T
+    global MIN_T
+    global MAX_T
+    
     db = Otter(url=API_URL)
     meta = db.get_meta(names=transient_default_name)[0]
     dataset = db.query(names=transient_default_name)[0]
@@ -265,6 +387,13 @@ async def transient_subpage(transient_default_name:str):
         except FailedQueryError:
             pass
 
+    allphot = db.get_phot(
+        names = transient_default_name,
+        flux_unit = "Jy",
+        date_unit = "mjd",
+        return_type = "pandas"
+    )
+        
     hasphot = len(phot_types) > 0
 
     fov_arcmin = 1.5
@@ -314,35 +443,102 @@ async def transient_subpage(transient_default_name:str):
         table = generate_property_table(meta)
         
         if hasphot:
-            ui.label(f'Plots').classes("text-h6")
+            # ui.label(f'Plots').classes("text-h3")
 
-            fig = go.Figure()
-            plot = ui.plotly(fig)
+            with ui.row().classes('w-full gap-10'):
+                
+                # Light curves
+                with ui.column():
+                    ui.label(f'Light Curves').classes("text-h6")
+                    
+                    fig_lc = go.Figure()
+                    plot_lc = ui.plotly(fig_lc)
 
+                    plot_options = list(phot_types.keys())
+                    plot_toggle = ui.toggle(
+                        plot_options,
+                        value=plot_options[0],
+                        on_change=lambda e : plot_lightcurve(
+                            phot_types[e.value],
+                            e.value,
+                            fig_lc,
+                            plot_lc,
+                            meta
+                        )
+                    )
+                    
+                    plot_lightcurve(
+                        phot_types[plot_options[0]],
+                        plot_options[0],
+                        fig_lc,
+                        plot_lc,
+                        meta
+                    )                            
 
-            plot_options = list(phot_types.keys())
-            plot_toggle = ui.toggle(
-                plot_options,
-                value=plot_options[0],
-                on_change=lambda e : plot_lightcurve(
-                    phot_types[e.value],
-                    e.value,
-                    fig,
-                    plot,
-                    meta
-                )
-            )
+                # SED
+                with ui.column():
+                    ui.label("Spectral Energy Distribution").classes("text-h6")
 
-            plot_lightcurve(
-                phot_types[plot_options[0]],
-                plot_options[0],
-                fig,
-                plot,
-                meta
-            )            
+                    sed_fig = go.Figure()
+                    sed_plot = ui.plotly(sed_fig)
+                    
+                    with ui.row():
+                        ui.number(
+                            label="dt = ",
+                            value=DELTA_T,
+                            on_change=lambda e : _update_global_delta_t(
+                                e.value,
+                                allphot,
+                                sed_fig,
+                                sed_plot,
+                                meta
+                            )
+                        )
 
-            allphot = pd.concat(phot_types.values())
+                        ui.number(
+                            label="Min. Time = ",
+                            value=MIN_T,
+                            on_change=lambda e:_update_global_min_t(
+                                e.value,
+                                allphot,
+                                sed_fig,
+                                sed_plot,
+                                meta
+                            )
+                        )
 
+                        ui.number(
+                            label="Max. Time = ",
+                            value=MAX_T,
+                            on_change=lambda e:_update_global_max_t(
+                                e.value,
+                                allphot,
+                                sed_fig,
+                                sed_plot,
+                                meta
+                            )
+                        )
+
+                        ui.select(
+                            ["Frequency [GHz]", "Wavelength [nm]"],
+                            value = "Frequency [GHz]",
+                            label='x-axis',
+                            on_change=lambda e : _update_global_xaxis(
+                                e.value,
+                                allphot,
+                                sed_fig,
+                                sed_plot,
+                                meta
+                            )
+                        )
+                        
+                    plot_sed(
+                        allphot,
+                        sed_fig,
+                        sed_plot,
+                        meta
+                    )
+                    
             all_phot_refs = []
             all_phot_hrns = []
             for ref, hrn in zip(allphot.reference, allphot.human_readable_refs):
