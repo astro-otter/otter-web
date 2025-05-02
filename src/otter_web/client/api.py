@@ -16,6 +16,10 @@ from ..config import API_URL, WEB_BASE_URL
 from otter import Otter
 
 API_ROUTER = APIRouter()
+HOP_BY_HOP_HEADERS = {
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade", "host"
+}
 
 async def arangodb_proxy_post(request:Request, proxy_url:str):
     """
@@ -25,6 +29,13 @@ async def arangodb_proxy_post(request:Request, proxy_url:str):
         request [Request] : the fastapi request object
         proxy_url [str] : The url to spoof
     """
+    # Filter and forward headers
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in HOP_BY_HOP_HEADERS
+    }
+
     try:
         body = await request.json()
     except Exception as e:
@@ -38,6 +49,7 @@ async def arangodb_proxy_post(request:Request, proxy_url:str):
         response = await run.io_bound(
             requests.post,
             proxy_url,
+            headers=headers,
             json=body
         )
         response.raise_for_status()
@@ -58,6 +70,63 @@ async def arangodb_proxy_post(request:Request, proxy_url:str):
     )
     return json_resp
 
+async def arangodb_proxy_put(request:Request, proxy_url:str):
+    """
+    Some general proxy code to post JSON to arangodb
+
+    Args:
+        request [Request] : the fastapi request object
+        proxy_url [str] : The url to spoof
+    """
+    # Filter and forward headers
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in HOP_BY_HOP_HEADERS
+    }
+
+    # Make sure Authorization header is passed through
+    if 'Authorization' not in headers:
+        return JSONResponse(
+            status_code=400,
+            content={"error": True, "code": 400, "errorMessage": "Missing Authorization header"}
+        )
+    
+    try:
+        body = await request.json()
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": True, "code": 400, "errorMessage": f"Invalid JSON body: {str(e)}"}
+        )
+
+    # Send query to ArangoDB
+    try:
+        response = await run.io_bound(
+            requests.put,
+            proxy_url,
+            headers=headers,
+            json=body
+        )
+        response.raise_for_status()
+    except Exception as e:
+        response = JSONResponse(
+            status_code=500,
+            content={
+                'error': True,
+                "code": 500,
+                "errorMessage": f'Failed to fetch data from ArangoDB through the Proxy: {e}'
+            }
+        )
+        return response
+
+    json_resp = JSONResponse(
+        status_code=response.status_code,
+        content=response.json()
+    )
+    return json_resp
+
+
 async def arangodb_proxy_get(request:Request, proxy_url:str):
     """
     Some general proxy code to post JSON to arangodb
@@ -66,6 +135,12 @@ async def arangodb_proxy_get(request:Request, proxy_url:str):
         request [Request] : the fastapi request object
         proxy_url [str] : The url to spoof
     """
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in HOP_BY_HOP_HEADERS
+    }
+    
     try:
         body = await request.body()
     except Exception as e:
@@ -78,7 +153,8 @@ async def arangodb_proxy_get(request:Request, proxy_url:str):
     try:
         response = await run.io_bound(
             requests.get,
-            proxy_url
+            proxy_url,
+            headers=headers
         )
         response.raise_for_status()
     except Exception as e:
@@ -122,5 +198,24 @@ async def api_foxx(db: str, request: Request):
 @API_ROUTER.post(os.path.join(WEB_BASE_URL, "api/_db/{db}/_api/cursor"))
 async def api_proxy_cursor(db: str, request: Request):
     proxy_url = f"{API_URL}/_db/{db}/_api/cursor"
+    arango_resp = await arangodb_proxy_post(request, proxy_url)
+    return arango_resp
+
+@API_ROUTER.put(os.path.join(WEB_BASE_URL, "api/_db/{db}/_api/collection/{collection}/truncate"))
+async def api_put_truncate(db: str, collection: str, request: Request):
+    proxy_url = f"{API_URL}/_db/{db}/_api/collection/{collection}/truncate"
+    arango_resp = await arangodb_proxy_put(request, proxy_url)
+    return arango_resp
+
+@API_ROUTER.post(os.path.join(WEB_BASE_URL, "api/_db/{db}/_api/document/{collection}"))
+async def api_add_doc(db: str, collection:str, request: Request):
+    proxy_url = f"{API_URL}/_db/{db}/_api/document/{collection}"
+    arango_resp = await arangodb_proxy_post(request, proxy_url)
+    return arango_resp
+
+@API_ROUTER.post(os.path.join(WEB_BASE_URL, "api/_open/auth"))
+async def get_jwt_token(request:Request):
+    proxy_url = f"{API_URL}/_open/auth"
+    print(proxy_url)
     arango_resp = await arangodb_proxy_post(request, proxy_url)
     return arango_resp

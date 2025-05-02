@@ -282,14 +282,23 @@ def send_to_vetting(upload_input: UploadInput, input_type):
     upload_input.meta_df.to_csv(metapath)
     
     # upload the data to the otter vetting collection
-    local_db = Otter.from_csvs(
-        metafile = metapath,
-        photfile = photpath if os.path.exists(photpath) else None,
-        local_outpath = outpath,
-        db = db
-    )
-    local_db.upload_private(testing=False)
-    
+    try:
+        local_db = Otter.from_csvs(
+            metafile = metapath,
+            photfile = photpath if os.path.exists(photpath) else None,
+            local_outpath = outpath,
+            db = db
+        )
+        local_db.upload_private(testing=False)
+    except Exception as e:
+        ui.notify(f"""
+        Upload failed with exception {e}! Please try again or contact an OTTER admin!
+        """,
+                  position="center",
+                  type = "negative"
+        )
+        return
+        
     ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
         
 def collect_uploader_info(set_values):

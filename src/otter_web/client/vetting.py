@@ -110,7 +110,7 @@ def vetting() -> None:
             lambda e : ui.navigate.to(
                 os.path.join(
                     WEB_BASE_URL,
-                    '{e.args[1]["dataset_id"]}'
+                    f'{e.args[1]["dataset_id"]}'
                 )
             )
         )
@@ -176,7 +176,7 @@ def approve(t):
             arangoURL = API_URL
         )
         
-        db.upload()
+        db.upload(t, collection="otter")
         
     except Exception as e:
         ui.notify("Processing the dataset failed, please check again!", type="negative")
