@@ -1,3 +1,3 @@
 ,name,alias,ra,dec,refs,hasPhot,hasSpec,json_path
-0,testTDE,['testTDE'],15d00m00s,1d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/testTDE.json
-1,test_TDE,['test_TDE'],0d00m00s,0d00m00s,['2024TNSAN..56....1C'],False,False,/home/nfranz/astro-otter/otter-web/.otter/test_TDE.json
+0,TEST 5,['TEST 5'],15d00m00s,5d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-5.json
+1,TEST TDE 8,['TEST TDE 8'],75d00m00s,5d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-TDE-8.json

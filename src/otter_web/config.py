@@ -7,6 +7,7 @@ import os
 # THAT IS WHY THIS BRANCH IS DIFFERENT AND SHOULD
 # REMAIN DIFFERENT (BUT CAUGHT UP WITH) MAIN
 API_URL = os.environ.get("ARANGO_URL", "http://localhost:8529")
+print(f"Connecting to {API_URL}")
 WEB_BASE_URL = "/"
 print(f"The WEB_BASE_URL for the app is set to {WEB_BASE_URL}")
 

@@ -10,7 +10,7 @@ import pandas as pd
 from ..config import vetting_password, unrestricted_page_routes, otterpath, API_URL, WEB_BASE_URL
 from ..theme import frame
 
-from otter import Otter
+from otter import Otter, Transient
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -142,7 +142,7 @@ def vetting_subpage(dataset_id):
         with ui.row():
             ui.button("Approve", color='green',
                       on_click=lambda:approve(t))
-            ui.button("Reject", color='red', on_click=lambda:reject(dataset_id))
+            ui.button("Reject", color='red', on_click=lambda:reject(dataset_id, conn))
             
             ui.button(
                 "Download Dataset",
@@ -163,9 +163,10 @@ def vetting_subpage(dataset_id):
             {'content': {'json': t}}
         ).classes('w-full')
 
-def approve(t):
+def approve(t, testing=False):
 
-    ui.notify("Processing the data, this takes a little...")
+    n = ui.notification("Processing the data, this may take a little...")
+    n.spinner = True
     
     try:
         # this will upload the dataset to the transients collection in the arangodb
@@ -173,20 +174,52 @@ def approve(t):
         db = Otter(
             username="vetting-user",
             password=vetting_password,
-            arangoURL = API_URL
+            url = API_URL
         )
-        
-        db.upload(t, collection="otter")
+
+        res = db.query(coords=Transient(t).get_skycoord())
+        if len(res) > 1:
+            raise OtterLimitationError(
+                "Some objects in Otter are too close! Consider reducing the search radius!"
+            )
+
+        elif len(res) == 1:
+            # this object exists in otter already, let's grab the transient data and
+            # merge the files
+            merged = t + res[0]
+            
+            # copy over the special arangodb keys
+            merged["_key"] = res[0]["_key"]
+            merged["_id"] = str(res[0]["_id"]).replace("vetting", "transients")
+            
+            # we also have to delete the document from the OTTER database
+            doc = db.fetchDocument(res[0]["_id"])
+            if not testing:
+                doc.delete()
+            else:
+                print(f"Would delete\n{doc}")
+
+        else:
+            # remove protected keys that will need to get updated
+            del t["_id"]
+            del t["_key"]
+            del t["_rev"]
+            
+            merged = t
+
+        print(t)
+        doc = db.upload(merged, collection="transients", testing=testing)
+        print(doc)
         
     except Exception as e:
         ui.notify("Processing the dataset failed, please check again!", type="negative")
         ui.notify(e, type="negative")
         return
     
-    ui.notify("Data was successfully processed!")
     ui.navigate.to(os.path.join(WEB_BASE_URL, "vetting"))
+    ui.notification("Data was successfully processed!")
     
-def reject(dataset_id):
+def reject(dataset_id, conn):
 
     db = Database(conn, "otter")
     t_doc = db.fetchDocument(f"vetting/{dataset_id}")
@@ -198,7 +231,7 @@ def reject(dataset_id):
 def download_dataset(t, dataset_id):
     ui.download(bytes(t), f"{dataset_id}.csv")
         
-@ui.page(os.path.join(WEB_BASE_URL, '/login'))
+@ui.page(os.path.join(WEB_BASE_URL, 'login'))
 def login() -> Optional[RedirectResponse]:
     def try_login() -> None:  # local function to avoid passing username and password as arguments
         if passwords.get(username.value) == password.value:

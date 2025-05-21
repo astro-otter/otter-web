@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from astropy.coordinates import SkyCoord
 
-from otter import Otter
+from otter import Otter, util
 
 db = Otter(url=API_URL)
 logger = logging.getLogger(__name__)
@@ -34,6 +34,8 @@ class SearchInput:
     add_dec = partialmethod(update, key='dec')
     add_radius = partialmethod(update, key='radius')
     add_hasphot = partialmethod(update, key='hasphot')
+    add_spec_classed = partialmethod(update, key='spec_classed')
+    add_unambiguous = partialmethod(update, key='unambiguous')
     add_ra_unit = partialmethod(update, key='ra_unit')
     add_classification = partialmethod(update, key='classification')
 
@@ -144,10 +146,8 @@ def search_form(search_results, post_table):
             on_change = search_input.add_radius
         )
 
-        
-        class_options = ['TDE', 'ANT', 'SN', 'SLSN']
         searchclass = ui.select(
-            class_options,
+            util._KNOWN_CLASS_ROOTS,
             label = 'Classification',
             on_change = search_input.add_classification
         )
@@ -163,12 +163,7 @@ def search_form(search_results, post_table):
             placeholder='Enter a maximum redshift',
             on_change = search_input.add_maxz
         )
-
-        hasphot = ui.checkbox(
-            "Has Photometry?",
-            on_change = search_input.add_hasphot
-        )
-
+        
         unit_options = ['hourangle', 'degree']
         ra_unit = ui.select(
             unit_options,
@@ -182,6 +177,21 @@ def search_form(search_results, post_table):
             'Minimum Redshift',
             placeholder='Enter a minimum redshift',
             on_change = search_input.add_minz
+        )
+
+        hasphot = ui.checkbox(
+            "Has Photometry?",
+            on_change = search_input.add_hasphot
+        )
+
+        hasspecclass = ui.checkbox(
+            "Spectroscopically Confirmed?",
+            on_change = search_input.add_spec_classed
+        )
+
+        unambiguous = ui.checkbox(
+            "Unambiguously Classified?",
+            on_change = search_input.add_unambiguous
         )
 
         

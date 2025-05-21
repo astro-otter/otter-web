@@ -1,9 +1,9 @@
 {
     "name": {
-        "default_name": "testTDE",
+        "default_name": "TEST TDE 8",
         "alias": [
             {
-                "value": "testTDE",
+                "value": "TEST TDE 8",
                 "reference": [
                     "2024TNSAN.263....1F"
                 ]
@@ -12,18 +12,18 @@
     },
     "coordinate": [
         {
-            "ra": 1,
-            "dec": 1,
+            "ra": 5,
+            "dec": 5,
             "ra_units": "hourangle",
             "dec_units": "deg",
             "reference": [
                 "2024TNSAN.263....1F"
             ],
-            "coordinate_type": "equitorial"
+            "coordinate_type": "equatorial"
         }
     ],
     "schema_version": {
-        "comment": "Uploader:Noah Franz | Email:noahfranz13@gmail.com"
+        "comment": "Uploader:Noah TEST | Email:nfranz@arizona.edu"
     },
     "reference_alias": [
         {

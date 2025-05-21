@@ -284,15 +284,17 @@ def generate_property_table(meta):
 
     # get default classification
     try:
-        default_class = meta.get_classification()
+        classes = ", ".join(
+            f'{c["object_class"]} (C={c["confidence"]})' for c in meta["classification"]["value"]
+        )
         rows.append(
             {
-                'prop': "Default Classification (Our Confidence)",
-                "val": f"{default_class[0]} (Confidence = {default_class[1]})"
+                'prop': "Classifications (Flag)",
+                "val": f"{classes}"
             }   
         )
 
-    except KeyError:
+    except Exception:
         pass
 
     # get the redshift

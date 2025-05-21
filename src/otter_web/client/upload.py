@@ -6,6 +6,9 @@ import re
 import email
 import smtplib
 import uuid
+import logging
+import traceback
+import shutil
 
 import pandas as pd
 
@@ -23,6 +26,8 @@ from astropy.time import Time
 from validate_email import validate_email
 
 from otter import Otter
+
+log = logging.getLogger(__file__)
 
 db = Otter(url=API_URL, username="vetting-user", password=vetting_password)
 
@@ -164,7 +169,7 @@ def validate_and_save_phot(e, save_values):
         df = pd.read_csv(io.StringIO(text), sep=',')
     except Exception as e:
         ui.notify("Unable to finish your upload because pandas can't parse this file!")
-        raise InvalidInputError()
+        raise InvalidInputError() from e
 
     # make sure all of the required columns are there
     required_columns = [
@@ -297,6 +302,8 @@ def send_to_vetting(upload_input: UploadInput, input_type):
                   position="center",
                   type = "negative"
         )
+        
+        traceback.print_exc()
         return
         
     ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
@@ -447,13 +454,16 @@ def single_object_upload_form():
     
     # photometry
     collect_photometry(set_value)
-
+    
     partial_send_to_vetting = partial(send_to_vetting, input_type="single")
-    ui.button('Submit').props('type="submit"').on_click(
-        lambda: partial_send_to_vetting(
-            uploaded_values
-        )
-    )     
+    def _send_single_to_vetting():
+        try:
+            partial_send_to_vetting(uploaded_values)
+        except Exception as e:
+            ui.notify("Upload failed!!")
+            ui.notify(e)
+    
+    ui.button('Submit').props('type="submit"').on_click(_send_single_to_vetting)     
 
     
 def multi_object_upload_form():
