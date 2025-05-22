@@ -1,0 +1,50 @@
+{
+    "schema_version": {
+        "comment": "Uploader:Noah TEST | Email:nfranz@arizona.edu"
+    },
+    "coordinate": [
+        {
+            "ra": 1,
+            "dec": 1,
+            "ra_units": "hourangle",
+            "dec_units": "deg",
+            "reference": [
+                "2024TNSAN.263....1F"
+            ],
+            "coordinate_type": "equatorial"
+        }
+    ],
+    "reference_alias": [
+        {
+            "name": "2024TNSAN.263....1F",
+            "human_readable_name": "Franz, N. et al. (2024)"
+        }
+    ],
+    "name": {
+        "default_name": "TEST TDE 10",
+        "alias": [
+            {
+                "value": "Test Transient 4",
+                "reference": [
+                    "2024TNSAN.263....1F"
+                ]
+            },
+            {
+                "value": "TEST TDE 10",
+                "reference": [
+                    "2024TNSAN.263....1F"
+                ]
+            }
+        ]
+    },
+    "distance": [
+        {
+            "value": 9,
+            "reference": [
+                "2024TNSAN.263....1F"
+            ],
+            "computed": false,
+            "distance_type": "redshift"
+        }
+    ]
+}

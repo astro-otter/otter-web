@@ -49,7 +49,7 @@ class UploadInput:
     coord_bibcode: str = None
     
     redshift: float = None
-    redshift_bibcode: float = None
+    redshift_bibcode: str = None
     lum_dist: float = None
     lum_dist_unit: str = None
     lum_dist_bibcode: str = None
@@ -233,6 +233,12 @@ def validate_and_save_meta(e, save_values):
     save_values("meta_df", df)
     
 def send_to_vetting(upload_input: UploadInput, input_type):
+    n = ui.notification(
+        "Processing the data, this may take a little...",
+        spinner = True,
+        timeout = 10,
+    )
+
     if input_type == "single":
         upload_input.verify_input()
 
@@ -247,26 +253,26 @@ def send_to_vetting(upload_input: UploadInput, input_type):
 
         if upload_input.redshift is not None:
             meta_dict["redshift"] = [int(upload_input.redshift)]
-            meta_dict["redshift_bibcode"] = [upload_input.redshift_bibcode]
+            meta_dict["redshift_bibcode"] = [str(upload_input.redshift_bibcode)]
 
         if upload_input.lum_dist is not None:
             meta_dict["luminosity_distance"] = [int(upload_input.lum_dist)]
             meta_dict["luminosity_distance_units"] = [upload_input.lum_dist_unit]
-            meta_dict["luminosity_distance_bibcode"] = [upload_input.lum_dist_bibcode]
+            meta_dict["luminosity_distance_bibcode"] = [str(upload_input.lum_dist_bibcode)]
 
         if upload_input.comoving_dist is not None:
             meta_dict["comoving_distance"] = [upload_input.comoving_dist]
             meta_dict["comoving_distance_units"] = [upload_input.comoving_dist_unit]
-            meta_dict["comoving_distance_bibcode"] = [upload_input.comoving_dist_bibcode]
+            meta_dict["comoving_distance_bibcode"] = [str(upload_input.comoving_dist_bibcode)]
             
         if upload_input.discovery_date is not None:
             meta_dict["discovery_date"] = [upload_input.discovery_date]
             meta_dict["discovery_date_format"] = [upload_input.discovery_date_format]
-            meta_dict["discovery_date_bibcode"] = [upload_input.discovery_date_bibcode]
+            meta_dict["discovery_date_bibcode"] = [str(upload_input.discovery_date_bibcode)]
 
         if upload_input.proposed_classification is not None:
             meta_dict["classification"] = [upload_input.proposed_classification]
-            meta_dict["classification_bibcode"] = [upload_input.classification_bibcode]
+            meta_dict["classification_bibcode"] = [str(upload_input.classification_bibcode)]
 
         upload_input.meta_df = pd.DataFrame(meta_dict)
 
@@ -275,10 +281,10 @@ def send_to_vetting(upload_input: UploadInput, input_type):
         f"Uploader:{upload_input.uploader_name} | Email:{upload_input.uploader_email}"
         
     dataset_id = str(uuid.uuid4())
-    root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    outpath = os.path.join(root_dir, "tmp", f"{dataset_id}")
+    #root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    outpath = os.path.join("/tmp", "otter", f"{dataset_id}")
     if not os.path.exists(outpath):
-        os.mkdir(outpath)
+        os.makedirs(outpath)
 
     metapath = os.path.join(outpath, "meta.csv")
     photpath = os.path.join(outpath, "photometry.csv")
@@ -435,7 +441,7 @@ def single_object_upload_form():
     
     ui.label("Optional Information (Remember to cite the original source as the bibcode!)").classes("text-h6")
     ui.input("Redshift", on_change=partial(set_value, "redshift"))
-    ui.input("Redshift Bibcode", on_change=partial(set_value, "redshift_bibcde"))
+    ui.input("Redshift Bibcode", on_change=partial(set_value, "redshift_bibcode"))
     
     ui.input("Luminosity Distance", on_change=partial(set_value, "lum_dist"))
     ui.input("Luminosity Distance Astropy Unit String", on_change=partial(set_value, "lum_dist_unit"))
@@ -515,8 +521,8 @@ async def upload():
 @ui.page(os.path.join(WEB_BASE_URL, "upload/{dataset_id}/success"))
 def upload_success(dataset_id):
 
-    root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    datapath = os.path.join(root_dir, "tmp", f"{dataset_id}")
+    #root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    datapath = os.path.join("/tmp","otter", f"{dataset_id}")
 
     meta_path = os.path.join(datapath, "meta.csv")
     meta_df = pd.read_csv(meta_path, index_col=0)

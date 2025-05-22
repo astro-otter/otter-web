@@ -1,0 +1,43 @@
+{
+    "name": {
+        "default_name": "TEST Transient 1",
+        "alias": [
+            {
+                "value": "TEST Transient 1",
+                "reference": [
+                    "2024TNSAN.263....1F"
+                ]
+            }
+        ]
+    },
+    "coordinate": [
+        {
+            "ra": 3,
+            "dec": 3,
+            "ra_units": "hourangle",
+            "dec_units": "deg",
+            "reference": [
+                "2024TNSAN.263....1F"
+            ],
+            "coordinate_type": "equatorial"
+        }
+    ],
+    "classification": {
+        "value": {
+            "object_class": "ANT",
+            "confidence": 0,
+            "reference": [
+                "2024TNSAN.263....1F"
+            ]
+        }
+    },
+    "schema_version": {
+        "comment": "Uploader:Noah TEST | Email:noahfranz13@gmail.com"
+    },
+    "reference_alias": [
+        {
+            "name": "2024TNSAN.263....1F",
+            "human_readable_name": "Franz, N. et al. (2024)"
+        }
+    ]
+}

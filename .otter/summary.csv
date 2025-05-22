@@ -1,3 +1,5 @@
-,name,alias,ra,dec,refs,hasPhot,hasSpec,json_path
-0,TEST 5,['TEST 5'],15d00m00s,5d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-5.json
-1,TEST TDE 8,['TEST TDE 8'],75d00m00s,5d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-TDE-8.json
+,name,alias,ra,dec,refs,hasPhot,hasSpec,json_path,z
+0,TEST Transient 1,['TEST Transient 1'],45d00m00s,3d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-Transient-1.json,
+1,TEST TDE 10,"['Test Transient 4', 'TEST TDE 10']",15d00m00s,1d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-TDE-10.json,9.0
+2,TEST 5,['TEST 5'],15d00m00s,5d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-5.json,
+3,TEST TDE 8,['TEST TDE 8'],75d00m00s,5d00m00s,['2024TNSAN.263....1F'],False,False,/home/nfranz/astro-otter/otter-web/.otter/TEST-TDE-8.json,
