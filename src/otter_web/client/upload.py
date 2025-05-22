@@ -532,7 +532,7 @@ def upload_success(dataset_id):
     phot_path = os.path.join(datapath, "photometry.csv")
     phot_df = None
     if os.path.exists(phot_path):
-        phot_df = pd.read_csv(phot_df)
+        phot_df = pd.read_csv(phot_path)
 
     phot_str = io.StringIO()
     if phot_df is not None:
