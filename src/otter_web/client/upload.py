@@ -520,7 +520,7 @@ async def upload():
 
 @ui.page(os.path.join(WEB_BASE_URL, "upload/{dataset_id}/success"))
 def upload_success(dataset_id):
-
+    
     #root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     datapath = os.path.join("/tmp","otter", f"{dataset_id}")
 
@@ -540,7 +540,13 @@ def upload_success(dataset_id):
         
     with frame():
         ui.label("Upload Successful!").classes("text-h4")
-
+        ui.label(
+            f"""Your Upload Identifier is {dataset_id}"""
+        ).classes("text-h6")
+        ui.label(
+            "Please save this and use it in any communications with the OTTER team."
+        ).classes("text-h6")
+        
         msg = f"""
 Your dataset has passed our automated vetting process and has now been sent to
 our team of vetters. If we have any questions we will reach out to you at the
