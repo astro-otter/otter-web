@@ -28,7 +28,9 @@ def main():
         favicon = 'src/otter_web/static/logo.png',
         dark = False, # inherits dark mode from the computer settings
         storage_secret = storage_secret,
-        on_air = args.on_air
+        on_air = args.on_air,
+        proxy_headers=True,          # this tells uvicorn to trust headers like X-Forwarded-Proto
+        forwarded_allow_ips='*',     # trust all proxy IPs
     )
 
 if __name__ in {"__main__", "__mp_main__"}:

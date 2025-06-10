@@ -26,3 +26,9 @@ otterpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "otterdb")
 # Vetter Emails to send messages to when there is a new otter upload
 vetting_password = os.environ.get("VETTING_PASSWORD", "")
 storage_secret = os.environ.get("STORAGE_SECRET", "")
+
+# headers to ignore when proxying
+HOP_BY_HOP_HEADERS = {
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade", "host"
+}
