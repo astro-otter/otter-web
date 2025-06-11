@@ -9,10 +9,11 @@ import uuid
 import logging
 import traceback
 import shutil
+import asyncio
 
 import pandas as pd
 
-from nicegui import ui
+from nicegui import ui, app, background_tasks, run 
 from ..theme import frame
 from ..config import API_URL, vetting_password, WEB_BASE_URL
 
@@ -232,16 +233,42 @@ def validate_and_save_meta(e, save_values):
 
     save_values("meta_df", df)
     
-def send_to_vetting(upload_input: UploadInput, input_type):
+async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str):
+
+    metapath = os.path.join(outpath, "meta.csv")
+    photpath = os.path.join(outpath, "photometry.csv")
+    if upload_input.phot_df is not None:
+        upload_input.phot_df.to_csv(photpath)
+    upload_input.meta_df.to_csv(metapath)
+    
+    # upload the data to the otter vetting collection
+    try:
+        local_db = Otter.from_csvs(
+            metafile = metapath,
+            photfile = photpath if os.path.exists(photpath) else None,
+            local_outpath = outpath,
+            db = db
+        )
+        local_db.upload_private(testing=False)
+    except Exception as e:
+        log.errror(f"""
+        Upload failed with exception {e}! Please try again or contact an OTTER admin!
+        """)
+        
+        traceback.print_exc()
+        return
+        
+def redirect_and_send_to_vetting(upload_input: UploadInput, input_type):
+
     n = ui.notification(
         "Processing the data, this may take a little...",
         spinner = True,
         timeout = 10,
     )
 
-    if input_type == "single":
-        upload_input.verify_input()
+    upload_input.verify_input()
 
+    if input_type == "single":
         meta_dict = dict(
             name = [upload_input.obj_name],
             ra = [int(upload_input.ra)],
@@ -280,40 +307,24 @@ def send_to_vetting(upload_input: UploadInput, input_type):
     upload_input.meta_df["comment"] = \
         f"Uploader:{upload_input.uploader_name} | Email:{upload_input.uploader_email}"
         
+    # save the uploaded dataframes in the users storage
+    user_data = {
+        "meta_df" : upload_input.meta_df.to_dict(),
+    }
+    if upload_input.phot_df is not None:
+        user_data["phot_df"] = upload_input.phot_df.to_dict() 
+    
+    app.storage.user.update(data=user_data)
+        
     dataset_id = str(uuid.uuid4())
-    #root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     outpath = os.path.join("/tmp", "otter", f"{dataset_id}")
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
-    metapath = os.path.join(outpath, "meta.csv")
-    photpath = os.path.join(outpath, "photometry.csv")
-    if upload_input.phot_df is not None:
-        upload_input.phot_df.to_csv(photpath)
-    upload_input.meta_df.to_csv(metapath)
-    
-    # upload the data to the otter vetting collection
-    try:
-        local_db = Otter.from_csvs(
-            metafile = metapath,
-            photfile = photpath if os.path.exists(photpath) else None,
-            local_outpath = outpath,
-            db = db
-        )
-        local_db.upload_private(testing=False)
-    except Exception as e:
-        ui.notify(f"""
-        Upload failed with exception {e}! Please try again or contact an OTTER admin!
-        """,
-                  position="center",
-                  type = "negative"
-        )
-        
-        traceback.print_exc()
-        return
+    background_tasks.create(send_to_vetting(upload_input, input_type, outpath))
         
     ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
-        
+
 def collect_uploader_info(set_values):
 
     ui.label("Uploader Information").classes("text-h5")
@@ -461,15 +472,16 @@ def single_object_upload_form():
     # photometry
     collect_photometry(set_value)
     
-    partial_send_to_vetting = partial(send_to_vetting, input_type="single")
     def _send_single_to_vetting():
         try:
-            partial_send_to_vetting(uploaded_values)
+            redirect_and_send_to_vetting(uploaded_values, input_type="single")
         except Exception as e:
             ui.notify("Upload failed!!")
             ui.notify(e)
-    
-    ui.button('Submit').props('type="submit"').on_click(_send_single_to_vetting)     
+            
+    ui.button('Submit').props('type="submit"').on_click(
+        _send_single_to_vetting
+    )     
 
     
 def multi_object_upload_form():
@@ -478,15 +490,18 @@ def multi_object_upload_form():
     set_value = partial(setattr, uploaded_values)
 
     collect_uploader_info(set_value)
-
     collect_meta(set_value)
     collect_photometry(set_value)
 
-    partial_send_to_vetting = partial(send_to_vetting, input_type="multi")
+    def _multi_send_to_vetting():
+        try:
+            redirect_and_send_to_vetting(uploaded_values, input_type="multi")
+        except Exception as e:
+            ui.notify("Upload failed!!")
+            ui.notify(e)
+            
     ui.button('Submit').props('type="submit"').on_click(
-        lambda: partial_send_to_vetting(
-            uploaded_values
-        )
+        _multi_send_to_vetting
     )     
 
 # Function to switch between forms
@@ -501,42 +516,37 @@ def show_form(selected_form, containers=None):
         
 @ui.page(os.path.join(WEB_BASE_URL, "upload"))
 async def upload():
-
-    partial_show_form = partial(show_form)
     
     with frame():
 
         ui.label("Upload Data to OTTER").classes("col-span-5 text-h4")
-            
+
         # Display the initial
         with ui.grid(rows="auto auto").classes("w-full") as grid:
             selected_tab = ui.toggle(
                 ['Single Object', 'Multiple Objects'],
                 value='Single Object',
-                on_change=lambda e: partial_show_form(e.value, containers=grid)
+                on_change=lambda e: show_form(e.value, containers=grid)
             ).style("width: 26.25%")
             
-            partial_show_form(selected_tab.value)
+            show_form(selected_tab.value)
 
 @ui.page(os.path.join(WEB_BASE_URL, "upload/{dataset_id}/success"))
-def upload_success(dataset_id):
-    
-    #root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    datapath = os.path.join("/tmp","otter", f"{dataset_id}")
+async def upload_success(dataset_id):
 
-    meta_path = os.path.join(datapath, "meta.csv")
-    meta_df = pd.read_csv(meta_path, index_col=0)
-    meta_str = io.StringIO()
-    meta_df.to_markdown(meta_str, index=False, tablefmt="grid")
-    
-    phot_path = os.path.join(datapath, "photometry.csv")
-    phot_df = None
-    if os.path.exists(phot_path):
-        phot_df = pd.read_csv(phot_path)
-
-    phot_str = io.StringIO()
-    if phot_df is not None:
-        phot_df.to_markdown(phot_str, index=False, tablefmt="grid")
+    meta_str, phot_str = io.StringIO(), io.StringIO()
+    if "data" in app.storage.user:
+        user_data = app.storage.user["data"]
+        
+        meta_df = pd.DataFrame.from_dict(user_data["meta_df"])
+        meta_df.to_markdown(meta_str, index=False, tablefmt="grid")
+        
+        phot_df = None
+        if "phot_df" in user_data:
+            phot_df = pd.read_csv(user_data["phot_df"])
+            
+        if phot_df is not None:
+            phot_df.to_markdown(phot_str, index=False, tablefmt="grid")
         
     with frame():
         ui.label("Upload Successful!").classes("text-h4")
