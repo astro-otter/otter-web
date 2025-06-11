@@ -20,8 +20,7 @@ from astropy.time import Time
 from astropy import units as u
 
 import logging
-logger = logging.getLogger(__name__)
-
+logger = logging.getLogger("otter-log")
 
 logger.info(API_URL)
 logger.info(f"Opening API server on {API_URL}...")

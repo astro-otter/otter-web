@@ -28,11 +28,14 @@ from validate_email import validate_email
 
 from otter import Otter
 
-log = logging.getLogger(__file__)
+log = logging.getLogger("otter-log")
 
 db = Otter(url=API_URL, username="vetting-user", password=vetting_password)
 
 class InvalidInputError(Exception):
+    pass
+
+class BackgroundTaskStack(list):
     pass
 
 @dataclass
@@ -235,6 +238,9 @@ def validate_and_save_meta(e, save_values):
     
 async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str):
 
+    await asyncio.sleep(10)
+
+    log.debug("Saving the original input csvs to a tmp directory")
     metapath = os.path.join(outpath, "meta.csv")
     photpath = os.path.join(outpath, "photometry.csv")
     if upload_input.phot_df is not None:
@@ -242,6 +248,7 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
     upload_input.meta_df.to_csv(metapath)
     
     # upload the data to the otter vetting collection
+    log.debug("Connecting to the database and uploading the data to the vetting collection")
     try:
         local_db = Otter.from_csvs(
             metafile = metapath,
@@ -258,17 +265,18 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
         traceback.print_exc()
         return
         
-def redirect_and_send_to_vetting(upload_input: UploadInput, input_type):
+def redirect_and_send_to_vetting(
+        upload_input: UploadInput,
+        task_stack : BackgroundTaskStack,
+        input_type
+):
 
-    n = ui.notification(
-        "Processing the data, this may take a little...",
-        spinner = True,
-        timeout = 10,
-    )
-
+    log.debug("Verifying input...")
     upload_input.verify_input()
+    log.debug("Input verification succeeded!")
 
     if input_type == "single":
+        log.debug("processing the single upload form input into a dataframe...")
         meta_dict = dict(
             name = [upload_input.obj_name],
             ra = [int(upload_input.ra)],
@@ -302,12 +310,15 @@ def redirect_and_send_to_vetting(upload_input: UploadInput, input_type):
             meta_dict["classification_bibcode"] = [str(upload_input.classification_bibcode)]
 
         upload_input.meta_df = pd.DataFrame(meta_dict)
-
+        log.debug("finished processing the single input form data!")
+    
     # add the uploader and email as comments to the meta_df
+    log.debug("adding the uploader information to the metadata dataframe as a comment")
     upload_input.meta_df["comment"] = \
         f"Uploader:{upload_input.uploader_name} | Email:{upload_input.uploader_email}"
         
     # save the uploaded dataframes in the users storage
+    log.debug("saving the dataframes to the users app storage")
     user_data = {
         "meta_df" : upload_input.meta_df.to_dict(),
     }
@@ -321,8 +332,11 @@ def redirect_and_send_to_vetting(upload_input: UploadInput, input_type):
     if not os.path.exists(outpath):
         os.makedirs(outpath)
 
-    background_tasks.create(send_to_vetting(upload_input, input_type, outpath))
-        
+    log.debug("starting the upload as a background task!")
+    task = background_tasks.create(send_to_vetting(upload_input, input_type, outpath))
+    task_stack.append(task) # this saves it to our stack
+    
+    log.debug("navigating to the success page")
     ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
 
 def collect_uploader_info(set_values):
@@ -427,7 +441,7 @@ def collect_photometry(set_values):
         on_upload=lambda e: validate_and_save_phot(e, set_values)
     ).classes("w-full")
     
-def single_object_upload_form():
+def single_object_upload_form(tasks):
 
     uploaded_values = UploadInput()
     set_value = partial(setattr, uploaded_values)
@@ -474,17 +488,18 @@ def single_object_upload_form():
     
     def _send_single_to_vetting():
         try:
-            redirect_and_send_to_vetting(uploaded_values, input_type="single")
+            redirect_and_send_to_vetting(uploaded_values, tasks, input_type="single")
         except Exception as e:
             ui.notify("Upload failed!!")
             ui.notify(e)
+            log.error(e)
             
     ui.button('Submit').props('type="submit"').on_click(
         _send_single_to_vetting
     )     
 
     
-def multi_object_upload_form():
+def multi_object_upload_form(tasks):
 
     uploaded_values = UploadInput()
     set_value = partial(setattr, uploaded_values)
@@ -495,28 +510,36 @@ def multi_object_upload_form():
 
     def _multi_send_to_vetting():
         try:
-            redirect_and_send_to_vetting(uploaded_values, input_type="multi")
+            redirect_and_send_to_vetting(uploaded_values, tasks, input_type="multi")
         except Exception as e:
             ui.notify("Upload failed!!")
             ui.notify(e)
+            log.error(e)
             
     ui.button('Submit').props('type="submit"').on_click(
         _multi_send_to_vetting
     )     
 
 # Function to switch between forms
-def show_form(selected_form, containers=None):
+def show_form(selected_form, tasks, containers=None):
     if containers is not None:
         for val in list(containers)[1:]:
             val.delete()
     if selected_form == 'Single Object':
-        single_object_upload_form()
+        single_object_upload_form(tasks)
     elif selected_form == 'Multiple Objects':
-        multi_object_upload_form()
+        multi_object_upload_form(tasks)
         
 @ui.page(os.path.join(WEB_BASE_URL, "upload"))
 async def upload():
-    
+
+    tasks = BackgroundTaskStack()
+
+    async def _show_form_and_wait(val, tasks, containers):
+        show_form(val, tasks, containers)
+        if len(tasks) > 0:
+            await tasks.pop(0)
+            
     with frame():
 
         ui.label("Upload Data to OTTER").classes("col-span-5 text-h4")
@@ -526,10 +549,10 @@ async def upload():
             selected_tab = ui.toggle(
                 ['Single Object', 'Multiple Objects'],
                 value='Single Object',
-                on_change=lambda e: show_form(e.value, containers=grid)
+                on_change=lambda e: _show_form_and_wait(e.value, tasks, containers=grid)
             ).style("width: 26.25%")
             
-            show_form(selected_tab.value)
+            show_form(selected_tab.value, tasks)
 
 @ui.page(os.path.join(WEB_BASE_URL, "upload/{dataset_id}/success"))
 async def upload_success(dataset_id):

@@ -9,6 +9,11 @@ from nicegui import ui, app
 from otter_web.client import *
 from otter_web.config import *
 
+import logging
+logging.basicConfig()
+logging.root.setLevel(logging.NOTSET)
+log = logging.getLogger("otter-log")
+
 def main():
     
     parser = argparse.ArgumentParser()
@@ -29,6 +34,7 @@ def main():
         dark = False, # inherits dark mode from the computer settings
         storage_secret = storage_secret,
         on_air = args.on_air,
+        reconnect_timeout = 60, # this makes nicegui keep trying
         proxy_headers=True,          # this tells uvicorn to trust headers like X-Forwarded-Proto
         forwarded_allow_ips='*',     # trust all proxy IPs
     )
