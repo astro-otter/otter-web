@@ -2,7 +2,7 @@ import os
 import numpy as np
 import ads
 
-from nicegui import ui
+from nicegui import ui, app
 from ..theme import frame
 from ..config import API_URL, WEB_BASE_URL
 
@@ -10,11 +10,11 @@ from otter import Otter, Transient
 
 db = Otter(url=API_URL)
 
-CHECKBOXES = {}
-
 @ui.page(os.path.join(WEB_BASE_URL, "citing"))
 async def citing_us_page():
 
+    app.storage.user.update(CHECKBOXES={})
+    
     with frame():
         imsize=32
         with ui.grid(rows=1, columns=16).classes("gap-0 no-wrap"):                        
@@ -87,7 +87,8 @@ _Disclaimer:_ We have done our best include every possible citation. But, as you
 @ui.refreshable    
 def display_object_list(object_list:list[Transient]):
     """Displays a scrollable area of the object default names in object_list"""
-    global CHECKBOXES;
+    CHECKBOXES = app.storage.user["CHECKBOXES"]
+
     with ui.scroll_area():
         with ui.grid(columns=4):
             for t in object_list:
@@ -98,12 +99,13 @@ def display_object_list(object_list:list[Transient]):
                 )
                             
 def _toggle_checkbox(e):
-    global CHECKBOXES
-    CHECKBOXES[e.sender.text] = e.sender
+    _CHECKBOXES = app.storage.user["CHECKBOXES"]
+    _CHECKBOXES[e.sender.text] = e.sender
+    app.storage.user.update(_CHECKBOXES)
 
 def _get_all_refs(t):
     res = []
-    for key in ["name/alias", "coordinate", "date_reference", "distance", "classification", "photometry", "host"]:
+    for key in ["name/alias", "coordinate", "date_reference", "distance", "classification/value", "photometry", "host"]:
         if key not in t: continue
         details = t[key]
         for d in details:
@@ -122,7 +124,7 @@ def _get_all_refs(t):
     return tocite, [r.strip() for r in uq_refs]
     
 def generate_bibtex_file():
-    global CHECKBOXES
+    CHECKBOXES = app.storage.user["CHECKBOXES"]
 
     bibstr_list = []
     names = [checkbox.text for checkbox in CHECKBOXES.values()]
