@@ -269,8 +269,8 @@ def redirect_and_send_to_vetting(
 
         meta_dict = dict(
             name = [upload_input.obj_name],
-            ra = [int(upload_input.ra)],
-            dec = [int(upload_input.dec)],
+            ra = [upload_input.ra],
+            dec = [upload_input.dec],
             ra_unit = [upload_input.ra_unit],
             dec_unit = [upload_input.dec_unit],
             coord_bibcode = [upload_input.coord_bibcode]
