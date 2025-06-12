@@ -4,6 +4,8 @@ import os
 import io
 import json
 from datetime import datetime
+import logging
+from copy import deepcopy
 
 import pandas as pd
 
@@ -21,7 +23,11 @@ from pyArango.database import Database
 
 from nicegui import app, ui
 
+log = logging.getLogger("otter-log")
+
 passwords = {"vetting-user": vetting_password}
+
+transient_to_approve = {}
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """This middleware restricts access to all NiceGUI pages.
@@ -31,9 +37,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if not app.storage.user.get('authenticated', False):
-            if request.url.path.startswith('/vetting'):
+            if 'vetting' in request.url.path:
                 app.storage.user['referrer_path'] = request.url.path  # remember where the user wanted to go
-                return RedirectResponse('/login')
+                return RedirectResponse(os.path.join(WEB_BASE_URL, 'login'))
         return await call_next(request)
 
 
@@ -48,6 +54,14 @@ def vetting() -> None:
     with frame():
 
         columns = [
+            {
+                "name": "approved",
+                "label": "Approved?",
+                "field": "approved",
+                "required": True,
+                "sortable": True,
+                "align": "left"
+            },
             {
                 "name": "dataset_id",
                 "label": "Dataset Unique ID",
@@ -90,11 +104,15 @@ def vetting() -> None:
         transients_to_vet = db.AQLQuery("FOR t IN vetting RETURN t")
         
         for t in transients_to_vet:
-            name, email = t["schema_version"]["comment"].split("|")
+            comment = t["schema_version"]["comment"].split("|")
+            name, email = comment[0:2]
+
             name = name.replace("Uploader:", "").strip()
             email = email.replace("Email:", "").strip()
+            approved = "approved" in t["schema_version"]["comment"].lower()
             table.add_rows(
                 {
+                    "approved" : "Yes" if approved else "Not yet!",
                     "dataset_id": t["_id"],
                     "uploader_name": name,
                     "uploader_email": email,
@@ -115,7 +133,7 @@ def vetting() -> None:
             )
         )
             
-        with ui.column().classes('absolute-center items-center'):
+        with ui.column().classes('bottom items-center'):
             ui.button(on_click=logout, icon='logout').props('outline round')
 
 @ui.page(os.path.join(WEB_BASE_URL, "vetting/{dataset_id}"))
@@ -126,31 +144,41 @@ def vetting_subpage(dataset_id):
         password=vetting_password,
         arangoURL=API_URL
     )
-
+    
     db = Database(conn, "otter")
     t_doc = db.fetchDocument(f"vetting/{dataset_id}")
-    t = t_doc.getStore()
-    
-    name, email = t["schema_version"]["comment"].split("|")
+
+    global transient_to_approve
+    transient_to_approve = t_doc.getStore()
+
+    comments = transient_to_approve["schema_version"]["comment"].split("|")
+    name, email = comments[0:2]
     name = name.replace("Uploader:", "").strip()
     email = email.replace("Email:", "").strip()
-    
+
     with frame():
 
         ui.label(f"Dataset {dataset_id}").classes("text-h4")
 
         with ui.row():
             ui.button("Approve", color='green',
-                      on_click=lambda:approve(t))
+                      on_click=lambda:approve(t_doc))
             ui.button("Reject", color='red', on_click=lambda:reject(dataset_id, conn))
             
             ui.button(
                 "Download Dataset",
                 color='grey',
-                on_click=lambda:download_dataset(t, dataset_id)
+                on_click=lambda:download_dataset(transient_to_approve, dataset_id)
             )
         
         msg = f"""
+**Instructions**
+        
+Please review the JSON data shown below in the editor. If you have minor edits please
+switch to the "text" tab at the top left of the editor, make those changes, and click
+"Save Changes" at the bottom. Use the above buttons to Approve and Deny this dataset.
+If you have major changes, please contact the uploader via the information below.
+
 **Uploader Information**
 
 *Uploader Name*: {name}\n
@@ -158,13 +186,32 @@ def vetting_subpage(dataset_id):
 
 **JSON Data**        
 """
+
         ui.restructured_text(msg)
-        ui.json_editor(
-            {'content': {'json': t}}
+        editor = ui.json_editor(
+            {'content': {'json': transient_to_approve}},
         ).classes('w-full')
 
-def approve(t, testing=False):
+        async def save_data():
+            global transient_to_approve
+            data = await editor.run_editor_method("get")
+            transient_to_approve = eval(data['text'])
+            ui.notify("Changes saved!")
+            
+        ui.button("Save Changes", on_click=save_data)
+        
+        
+def approve(doc, testing=False):
 
+    global transient_to_approve
+    t = transient_to_approve
+    tpatch = deepcopy(t)
+    tpatch["schema_version"]["comment"] = t["schema_version"]["comment"] + " | approved"
+    doc.set(tpatch)
+    doc.patch()
+    
+    print(doc.getPatches())
+    
     n = ui.notification("Processing the data, this may take a little...")
     n.spinner = True
     
@@ -184,22 +231,32 @@ def approve(t, testing=False):
             )
 
         elif len(res) == 1:
+            log.info("Match found in OTTER for this transient, merging!")
             # this object exists in otter already, let's grab the transient data and
             # merge the files
-            merged = t + res[0]
+
+            # save and remove some keys so the merging works
+            _key = res[0]["_key"]
+            _id = str(res[0]["_id"])
+            del res[0]["_key"]
+            del res[0]["_id"]
+            del res[0]["_rev"] # we don't need to save this one
+            
+            merged = Transient(t) + res[0]
             
             # copy over the special arangodb keys
-            merged["_key"] = res[0]["_key"]
-            merged["_id"] = str(res[0]["_id"]).replace("vetting", "transients")
+            merged["_key"] = _key
+            merged["_id"] = _id.replace("vetting", "transients")
             
             # we also have to delete the document from the OTTER database
-            doc = db.fetchDocument(res[0]["_id"])
             if not testing:
-                doc.delete()
+                log.debug(f"Removing old document: {_id}")
+                #doc.delete()
             else:
-                print(f"Would delete\n{doc}")
+                log.debug(f"Would delete\n{_id}")
 
         else:
+            log.info("No match found in OTTER, uploading as a new transient!")
             # remove protected keys that will need to get updated
             del t["_id"]
             del t["_key"]
@@ -207,17 +264,18 @@ def approve(t, testing=False):
             
             merged = t
 
-        print(t)
         doc = db.upload(merged, collection="transients", testing=testing)
-        print(doc)
         
     except Exception as e:
         ui.notify("Processing the dataset failed, please check again!", type="negative")
         ui.notify(e, type="negative")
+        log.exception(e)
         return
     
     ui.navigate.to(os.path.join(WEB_BASE_URL, "vetting"))
     ui.notification("Data was successfully processed!")
+
+    log.info(f"Successfully imported dataset: {t}")
     
 def reject(dataset_id, conn):
 
@@ -227,6 +285,8 @@ def reject(dataset_id, conn):
     
     ui.navigate.to(os.path.join(WEB_BASE_URL, "vetting"))
     ui.notify("Rejection successful!", type="positive")
+
+    log.info(f"Rejected dataset {dataset_id}!")
     
 def download_dataset(t, dataset_id):
     ui.download(bytes(t), f"{dataset_id}.csv")
@@ -242,7 +302,7 @@ def login() -> Optional[RedirectResponse]:
 
     with frame():
         if app.storage.user.get('authenticated', False):
-            return RedirectResponse('/')
+            return RedirectResponse(WEB_BASE_URL)
         with ui.card().classes('absolute-center'):
             username = ui.input('Username').on('keydown.enter', try_login)
             password = ui.input('Password', password=True, password_toggle_button=True).on('keydown.enter', try_login)

@@ -79,7 +79,7 @@ class UploadInput:
         else:
             super().__setattr__(k, v.value)
     
-    def verify_input(self):
+    def verify_input(self, _validate_email=False):
 
         # check that all required keys are provided
         required_keys = [
@@ -142,23 +142,24 @@ class UploadInput:
                 
 
         # check that the email address is at least syntactically correct
-        is_valid_email = validate_email(
-            email_address=self.uploader_email,
-            check_format=True,
-            check_blacklist=True,
-            check_dns=True,
-            dns_timeout=10,
-            check_smtp=True,
-            smtp_timeout=10,
-            smtp_helo_host='my.host.name',
-            smtp_from_address='my@from.addr.ess',
-            smtp_skip_tls=False,
-            smtp_tls_context=None,
-            smtp_debug=False,
-            # address_types=frozenset([IPv4Address, IPv6Address])
-        )
-        if self.uploader_email[-4:] != ".edu" and not is_valid_email:
-            raise InvalidInputError("The email address provided is not valid!", type="negative")
+        if _validate_email:
+            is_valid_email = validate_email(
+                email_address=self.uploader_email,
+                check_format=True,
+                check_blacklist=True,
+                check_dns=True,
+                dns_timeout=10,
+                check_smtp=True,
+                smtp_timeout=10,
+                smtp_helo_host='my.host.name',
+                smtp_from_address='my@from.addr.ess',
+                smtp_skip_tls=False,
+                smtp_tls_context=None,
+                smtp_debug=False,
+                # address_types=frozenset([IPv4Address, IPv6Address])
+            )
+            if self.uploader_email[-4:] != ".edu" and not is_valid_email:
+                raise InvalidInputError("The email address provided is not valid!", type="negative")
 
 def validate_and_save_phot(e, save_values):
     text = e.content.read().decode('utf-8')
@@ -190,11 +191,9 @@ def validate_and_save_phot(e, save_values):
             atleast_one_missing = True
 
     if atleast_one_missing:
-        print(df.columns)
         e.sender.reset()
         raise InvalidInputError()
             
-    print(df)
     save_values("phot_df", df)
 
 def validate_and_save_meta(e, save_values):
@@ -224,7 +223,6 @@ def validate_and_save_meta(e, save_values):
             atleast_one_missing = True
 
     if atleast_one_missing:
-        print(df.columns)
         e.sender.reset()
         raise InvalidInputError()
 
@@ -252,11 +250,9 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
         )
         local_db.upload_private(testing=False)
     except Exception as e:
-        log.error(f"""
+        log.exception(f"""
         Upload failed with exception {e}! Please try again or contact an OTTER admin!
         """)
-        
-        traceback.print_exc()
         return
         
 def redirect_and_send_to_vetting(
@@ -265,12 +261,12 @@ def redirect_and_send_to_vetting(
         input_type
 ):
     
-    log.debug("Verifying input...")
-    upload_input.verify_input()
-    log.debug("Input verification succeeded!")
-
     if input_type == "single":
         log.debug("processing the single upload form input into a dataframe...")
+        log.debug("Verifying input...")
+        upload_input.verify_input()
+        log.debug("Input verification succeeded!")
+
         meta_dict = dict(
             name = [upload_input.obj_name],
             ra = [int(upload_input.ra)],
@@ -491,7 +487,7 @@ def multi_object_upload_form(uploaded_values, tasks):
 # Function to switch between forms
 async def _send_single_to_vetting(uploaded_values, tasks):
     note = ui.notification(
-        "Uploading...",
+        "Uploading. This may take up to 2 minutes. Please do not refresh the page.",
         type="ongoing",
         timeout=None,
         spinner=True,
@@ -523,7 +519,7 @@ async def _send_single_to_vetting(uploaded_values, tasks):
         
 async def _multi_send_to_vetting(uploaded_values, tasks):
     note = ui.notification(
-        "Uploading...",
+        "Uploading. This may take up to 2 minutes. Please do not refresh the page.",
         type="ongoing",
         timeout=None,
         spinner=True,
@@ -617,7 +613,7 @@ async def upload_success(dataset_id):
         
         phot_df = None
         if "phot_df" in user_data:
-            phot_df = pd.read_csv(user_data["phot_df"])
+            phot_df = pd.DataFrame.from_dict(user_data["phot_df"])
             
         if phot_df is not None:
             phot_df.to_markdown(phot_str, index=False, tablefmt="grid")

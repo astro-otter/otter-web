@@ -1,1 +1,1 @@
-name, flux, flux_unit, flux_err, date, date_err, date_format, filter, telescope_area
+name, bibcode, flux, flux_unit, flux_err, date, date_err, date_format, filter, filter_eff, filter_eff_units
