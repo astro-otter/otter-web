@@ -10,6 +10,7 @@ import logging
 import traceback
 import shutil
 import asyncio
+import time
 
 import pandas as pd
 
@@ -33,7 +34,8 @@ log = logging.getLogger("otter-log")
 db = Otter(url=API_URL, username="vetting-user", password=vetting_password)
 
 class InvalidInputError(Exception):
-    pass
+    def __init__(self, msg, type=None):
+        super().__init__(msg)
 
 class BackgroundTaskStack(list):
     pass
@@ -93,57 +95,50 @@ class UploadInput:
         required_vals = [getattr(self, k) for k in required_keys]
 
         if None in required_vals:
+            msg = ""
             for k, v in zip(required_keys, required_vals):
                 if v is None:
-                    ui.notify(f"{k.replace('_', ' ')} is required!", type="negative")
-            raise InvalidInputError()
+                    msg+=f"{k.replace('_', ' ')} is required!\n"
+            raise InvalidInputError(msg)
 
         # check that conditional values are set
         if self.lum_dist is not None and (self.lum_dist_unit is None or self.lum_dist_bibcode is None):
-            ui.notify(f"luminosity distance units and bibcode are required if the luminosity distance is provided!", type="negative")
-            raise InvalidInputError()
+            raise InvalidInputError(f"luminosity distance units and bibcode are required if the luminosity distance is provided!", type="negative")
 
         if self.comoving_dist is not None and (self.comoving_dist_unit is None or self.comoving_dist_bibcode is None):
-            ui.notify(f"comoving distance units are required if the comoving distance is provided!", type="negative")
-            raise InvalidInputError()
-
+            raise InvalidInputError(f"comoving distance units are required if the comoving distance is provided!", type="negative")
+          
         if self.discovery_date is not None and (self.discovery_date_format is None or self.discovery_date_bibcode is None):
-            ui.notify(f"Discovery date format is required if the discovery date is provided!", type="negative")
-            raise InvalidInputError()
-
+            raise InvalidInputError(f"Discovery date format is required if the discovery date is provided!", type="negative")
+            
         # check units
         try:
             u.Unit(self.ra_unit)
         except Exception as e:
-            ui.notify("the provided ra unit is not a valid astropy unit", type="negative")
-            raise InvalidInputError() from e
+            raise InvalidInputError("the provided ra unit is not a valid astropy unit") from e
 
         try:
             SkyCoord(self.ra, self.dec, unit=(self.ra_unit, self.dec_unit))
         except Exception as e:
-            ui.notify("Astropy SkyCoord could not parse your ra, dec, and ra unit!", type="negative")
-            raise InvalidInputError() from e
+            raise InvalidInputError("Astropy SkyCoord could not parse your ra, dec, and ra unit!", type="negative") from e
             
         if self.lum_dist is not None:
             try:
                 u.Unit(self.lum_dist_unit)
             except Exception as e:
-                ui.notify("The provided luminosity distance unit is not a valid astropy unit", type="negative")
-                raise InvalidInputError() from e
+                raise InvalidInputError("The provided luminosity distance unit is not a valid astropy unit") from e
         
         if self.comoving_dist is not None:
             try:
                 u.Unit(self.comoving_dist_unit)
             except Exception as e:
-                ui.notify("The provided comoving distance unit is not a valid astropy unit", type="negative")
-                raise InvalidInputError() from e
+                raise InvalidInputError("The provided comoving distance unit is not a valid astropy unit", type="negative") from e
             
         if self.discovery_date is not None:
             try:
                 Time(self.discovery_date, format=self.discovery_date_form)
             except Exception as e:
-                ui.notify("The discovery date and discovery date format do not match astropy checking!", type="negative")
-                raise InvalidInputError() from e
+                raise InvalidInputError ("The discovery date and discovery date format do not match astropy checking!", type="negative") from e
                 
 
         # check that the email address is at least syntactically correct
@@ -163,8 +158,7 @@ class UploadInput:
             # address_types=frozenset([IPv4Address, IPv6Address])
         )
         if self.uploader_email[-4:] != ".edu" and not is_valid_email:
-            ui.notify("The email address provided is not valid!", type="negative")
-            raise InvalidInputError()
+            raise InvalidInputError("The email address provided is not valid!", type="negative")
 
 def validate_and_save_phot(e, save_values):
     text = e.content.read().decode('utf-8')
@@ -258,7 +252,7 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
         )
         local_db.upload_private(testing=False)
     except Exception as e:
-        log.errror(f"""
+        log.error(f"""
         Upload failed with exception {e}! Please try again or contact an OTTER admin!
         """)
         
@@ -270,7 +264,7 @@ def redirect_and_send_to_vetting(
         task_stack : BackgroundTaskStack,
         input_type
 ):
-
+    
     log.debug("Verifying input...")
     upload_input.verify_input()
     log.debug("Input verification succeeded!")
@@ -292,7 +286,7 @@ def redirect_and_send_to_vetting(
 
         if upload_input.lum_dist is not None:
             meta_dict["luminosity_distance"] = [int(upload_input.lum_dist)]
-            meta_dict["luminosity_distance_units"] = [upload_input.lum_dist_unit]
+            meta_dict["luminosity_distance_unit"] = [upload_input.lum_dist_unit]
             meta_dict["luminosity_distance_bibcode"] = [str(upload_input.lum_dist_bibcode)]
 
         if upload_input.comoving_dist is not None:
@@ -325,8 +319,6 @@ def redirect_and_send_to_vetting(
     if upload_input.phot_df is not None:
         user_data["phot_df"] = upload_input.phot_df.to_dict() 
     
-    app.storage.user.update(data=user_data)
-        
     dataset_id = str(uuid.uuid4())
     outpath = os.path.join("/tmp", "otter", f"{dataset_id}")
     if not os.path.exists(outpath):
@@ -335,10 +327,9 @@ def redirect_and_send_to_vetting(
     log.debug("starting the upload as a background task!")
     task = background_tasks.create(send_to_vetting(upload_input, input_type, outpath))
     task_stack.append(task) # this saves it to our stack
-    
-    log.debug("navigating to the success page")
-    ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
 
+    return dataset_id, user_data
+    
 def collect_uploader_info(set_values):
 
     ui.label("Uploader Information").classes("text-h5")
@@ -361,7 +352,7 @@ def collect_meta(set_values):
     * `redshift`: The redshift of the TDE
     * `redshift_bibcode`: The bibcode associated with the redshift you are providing
     * `luminosity_distance`: The luminosity distance to the TDE
-    * `luminosity_distance_units`: The luminosity distance units required if you give us a luminosity distance
+    * `luminosity_distance_unit`: The luminosity distance units required if you give us a luminosity distance
     * `luminosity_distance_bibcode`: The bibcode associated with the luminosity distance you are providing
     * `comoving_distance`: The comoving distance to the TDE
     * `comoving_distance_units`: The comoving distance units, required if you give us a comoving distance
@@ -441,9 +432,8 @@ def collect_photometry(set_values):
         on_upload=lambda e: validate_and_save_phot(e, set_values)
     ).classes("w-full")
     
-def single_object_upload_form(tasks):
+def single_object_upload_form(uploaded_values, tasks):
 
-    uploaded_values = UploadInput()
     set_value = partial(setattr, uploaded_values)
     
     collect_uploader_info(set_value)
@@ -485,61 +475,118 @@ def single_object_upload_form(tasks):
     
     # photometry
     collect_photometry(set_value)
-    
-    def _send_single_to_vetting():
-        try:
-            redirect_and_send_to_vetting(uploaded_values, tasks, input_type="single")
-        except Exception as e:
-            ui.notify("Upload failed!!")
-            ui.notify(e)
-            log.error(e)
-            
-    ui.button('Submit').props('type="submit"').on_click(
-        _send_single_to_vetting
-    )     
 
+    return uploaded_values
     
-def multi_object_upload_form(tasks):
+def multi_object_upload_form(uploaded_values, tasks):
 
-    uploaded_values = UploadInput()
     set_value = partial(setattr, uploaded_values)
 
     collect_uploader_info(set_value)
     collect_meta(set_value)
     collect_photometry(set_value)
 
-    def _multi_send_to_vetting():
-        try:
-            redirect_and_send_to_vetting(uploaded_values, tasks, input_type="multi")
-        except Exception as e:
-            ui.notify("Upload failed!!")
-            ui.notify(e)
-            log.error(e)
-            
-    ui.button('Submit').props('type="submit"').on_click(
-        _multi_send_to_vetting
-    )     
-
+    return uploaded_values
+    
 # Function to switch between forms
+async def _send_single_to_vetting(uploaded_values, tasks):
+    note = ui.notification(
+        "Uploading...",
+        type="ongoing",
+        timeout=None,
+        spinner=True,
+        close_button=True
+    )
+
+    await asyncio.sleep(0)
+    
+    try:
+        dataset_id, res = await run.io_bound(
+            redirect_and_send_to_vetting,
+            uploaded_values,
+            tasks,
+            input_type="single"
+        )
+        app.storage.user.update(data=res)
+    
+    except Exception as e:
+        note.type="negative"
+        note.message="Upload Failed!"
+        ui.notify(e, type="negative", multi_line=True)
+        log.error(e)
+        return
+
+    note.type="positive"
+    note.message="Upload Done! Redirecting..."
+    log.debug("navigating to the success page")
+    ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
+        
+async def _multi_send_to_vetting(uploaded_values, tasks):
+    note = ui.notification(
+        "Uploading...",
+        type="ongoing",
+        timeout=None,
+        spinner=True,
+        close_button=True
+    )
+    
+    await asyncio.sleep(0)
+
+    try:
+        dataset_id, res = await run.io_bound(
+            redirect_and_send_to_vetting,
+            uploaded_values,
+            tasks,
+            input_type="multi"
+        )
+        app.storage.user.update(data=res)
+        
+    except Exception as e:
+        note.type="negative"
+        note.message="Upload Failed!"
+        ui.notify(e)
+        log.error(e)
+        return
+
+    note.type="positive"
+    note.message="Upload Done! Redirecting..."
+    log.debug("navigating to the success page")
+    ui.navigate.to(os.path.join(WEB_BASE_URL, f"upload", f"{dataset_id}", "success"))
+    
 def show_form(selected_form, tasks, containers=None):
+
+    uploaded_values = UploadInput()
+    
     if containers is not None:
         for val in list(containers)[1:]:
             val.delete()
     if selected_form == 'Single Object':
-        single_object_upload_form(tasks)
+        uploaded_values = single_object_upload_form(uploaded_values, tasks)
+        ui.button(
+            'Submit',
+            on_click=partial(
+                _send_single_to_vetting,
+                uploaded_values,
+                tasks
+            )
+        ).props('type="submit"')
+            
     elif selected_form == 'Multiple Objects':
-        multi_object_upload_form(tasks)
+        uploaded_values = multi_object_upload_form(uploaded_values, tasks)
+        ui.button(
+            'Submit',
+            on_click=partial(
+                _multi_send_to_vetting,
+                uploaded_values,
+                tasks
+            )
+        ).props('type="submit"')
         
 @ui.page(os.path.join(WEB_BASE_URL, "upload"))
 async def upload():
-
+                
     tasks = BackgroundTaskStack()
-
-    async def _show_form_and_wait(val, tasks, containers):
-        show_form(val, tasks, containers)
-        if len(tasks) > 0:
-            await tasks.pop(0)
-            
+        
     with frame():
 
         ui.label("Upload Data to OTTER").classes("col-span-5 text-h4")
@@ -549,11 +596,15 @@ async def upload():
             selected_tab = ui.toggle(
                 ['Single Object', 'Multiple Objects'],
                 value='Single Object',
-                on_change=lambda e: _show_form_and_wait(e.value, tasks, containers=grid)
+                on_change=lambda e: show_form(
+                    e.value,
+                    tasks,
+                    containers=grid
+                )
             ).style("width: 26.25%")
             
             show_form(selected_tab.value, tasks)
-
+            
 @ui.page(os.path.join(WEB_BASE_URL, "upload/{dataset_id}/success"))
 async def upload_success(dataset_id):
 
