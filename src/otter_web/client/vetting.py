@@ -250,8 +250,7 @@ def approve(doc, testing=False):
             
             # we also have to delete the document from the OTTER database
             if not testing:
-                log.debug(f"Removing old document: {_id}")
-                #doc.delete()
+                log.debug(f"Overwriting old document: {_id}")
             else:
                 log.debug(f"Would delete\n{_id}")
 
