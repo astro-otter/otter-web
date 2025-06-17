@@ -92,7 +92,7 @@ def _post_table(events:List[dict]) -> None:
 
         try:
             default_class = Transient(event_json).get_classification()[0]
-        except (KeyError, TypeError):
+        except Exception:
             default_class = None
         
         table.add_rows(

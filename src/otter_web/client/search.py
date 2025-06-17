@@ -25,6 +25,10 @@ class SearchInput:
         self.search_kwargs = {}
 
     def update(self, e, key):
+
+        if hasattr(e.value, '__len__') and len(e.value) == 0:
+            return # we don't want to set anything
+        
         self.search_kwargs[key] = e.value
 
     add_name = partialmethod(update, key='names')
@@ -104,6 +108,7 @@ def do_search(search_input, search_results, post_table):
             )
         )
 
+    logger.debug(search_input.search_kwargs)
     res = db.get_meta(**search_input.search_kwargs)
     search_results.results = res
     logger.info(res)
