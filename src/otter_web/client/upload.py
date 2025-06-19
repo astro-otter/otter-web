@@ -66,6 +66,7 @@ class UploadInput:
     discovery_date_format: str = None
     discovery_date_bibcode: str = None
     proposed_classification: str = None
+    classification_flag: str = None
     classification_bibcode: str = None
 
     # photometry dataframe
@@ -132,15 +133,15 @@ class UploadInput:
             try:
                 u.Unit(self.comoving_dist_unit)
             except Exception as e:
-                raise InvalidInputError("The provided comoving distance unit is not a valid astropy unit", type="negative") from e
+                raise InvalidInputError("The provided comoving distance unit is not a valid astropy unit") from e
             
         if self.discovery_date is not None:
             try:
                 Time(self.discovery_date, format=self.discovery_date_form)
             except Exception as e:
-                raise InvalidInputError ("The discovery date and discovery date format do not match astropy checking!", type="negative") from e
+                raise InvalidInputError("The discovery date and discovery date format do not match astropy checking!") from e
                 
-
+        
         # check that the email address is at least syntactically correct
         if _validate_email:
             is_valid_email = validate_email(
@@ -166,9 +167,10 @@ def validate_and_save_phot(e, save_values):
 
     try:
         df = pd.read_csv(io.StringIO(text), sep=',')
-    except Exception as e:
+    except Exception as exc:
+        e.sender.reset()
         ui.notify("Unable to finish your upload because pandas can't parse this file!")
-        raise InvalidInputError() from e
+        raise InvalidInputError() from exc
 
     # make sure all of the required columns are there
     required_columns = [
@@ -193,6 +195,15 @@ def validate_and_save_phot(e, save_values):
     if atleast_one_missing:
         e.sender.reset()
         raise InvalidInputError()
+
+    # then also check some of the formats of the required columns
+    for date, date_format in zip(df.date, df.date_format):
+        try:
+            Time(date, format=date_format)
+        except Exception as exc:
+            ui.notify("At least one of the dates you provided for the photometry does not match the format given in the date_format column!", type="negative")
+            e.sender.reset()
+            raise InvalidInputError("At least one of the dates you provided for the photometry does not match the format given in the date_format column!") from exc
             
     save_values("phot_df", df)
 
@@ -202,9 +213,10 @@ def validate_and_save_meta(e, save_values):
 
     try:
         df = pd.read_csv(io.StringIO(text), sep=',')
-    except Exception as e:
+    except Exception as exc:
         ui.notify("Unable to finish your upload because pandas can't parse this file!")
-        raise InvalidInputError()
+        e.sender.reset()
+        raise InvalidInputError() from exc
 
     required_columns = [
         "name",
@@ -230,7 +242,7 @@ def validate_and_save_meta(e, save_values):
     
 async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str):
 
-    await asyncio.sleep(10)
+    # await asyncio.sleep(10)
 
     log.debug("Saving the original input csvs to a tmp directory")
     metapath = os.path.join(outpath, "meta.csv")
@@ -253,9 +265,9 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
         log.exception(f"""
         Upload failed with exception {e}! Please try again or contact an OTTER admin!
         """)
-        return
+        raise InvalidInputError(f"Upload failed: {e}")
         
-def redirect_and_send_to_vetting(
+async def redirect_and_send_to_vetting(
         upload_input: UploadInput,
         task_stack : BackgroundTaskStack,
         input_type
@@ -297,6 +309,9 @@ def redirect_and_send_to_vetting(
 
         if upload_input.proposed_classification is not None:
             meta_dict["classification"] = [upload_input.proposed_classification]
+            meta_dict["classification_flag"]= [
+                upload_input.classification_flag if upload_input.classification_flag is not None else 0
+            ]
             meta_dict["classification_bibcode"] = [str(upload_input.classification_bibcode)]
 
         upload_input.meta_df = pd.DataFrame(meta_dict)
@@ -321,9 +336,17 @@ def redirect_and_send_to_vetting(
         os.makedirs(outpath)
 
     log.debug("starting the upload as a background task!")
-    task = background_tasks.create(send_to_vetting(upload_input, input_type, outpath))
-    task_stack.append(task) # this saves it to our stack
-
+    #task = background_tasks.create(send_to_vetting(upload_input, input_type, outpath))
+    #task_stack.append(task) # this saves it to our stack
+    try:
+        await asyncio.wait_for(send_to_vetting(upload_input, input_type, outpath), timeout=119)
+    except asyncio.TimeoutError as e:
+        log.exception(f"Upload timed out: {e}")
+        ui.notify(
+            "Upload timed out after waiting for two minutes. Please check your dataset. If this dataset is particularly large and you suspect that is why it timed out, please contact an admin."
+        )
+        raise asyncio.TimeoutError()
+        
     return dataset_id, user_data
     
 def collect_uploader_info(set_values):
@@ -357,6 +380,7 @@ def collect_meta(set_values):
     * `discovery_date_format`: astropy time string format of the discovery date, required if you provide a discovery date
     * `discovery_date_bibcode`: The bibcode associated with the discovery date you are providing
     * `classification`: What would you classify this transient as?
+    * `classification_flag`: The flag for this classification. 0 means you don't trust the classification, 1 means it is photometrically classified, 2 means this is a TNS classificatin, and 3 means this is a spectroscopic classification.
     * `classification_bibcode`: The bibcode associated with the classification of this transient
     """
 
@@ -381,9 +405,9 @@ def collect_photometry(set_values):
 
     * `name`: The same name that you put in your metadata file
     * `bibcode`: The ADS bibcode associated with your publication of this photometry
-    * `flux`: The flux, fluxdensity, or count rate of the point
-    * `flux_err`: The error on the raw photometry value given.
-    * `flux_unit`: The unit on the flux measurement
+    * `flux`: The flux, flux density, or magnitude. If you are uploading counts, see the `raw` keyword below, which needs to be provided along with this. If the `raw` keyword is also used, this will be treated as a value after reduction (i.e. going into the `value` keyword in the schema). If this column is provided and not `raw`, it will be treated as the default raw value for this photometry point. 
+    * `flux_err`: The error on the photometry value given.
+    * `flux_unit`: The unit on the flux measurement.
     * `date`: The date you took this flux measurement
     * `date_format`: The astropy time string format that you used for this date
     * `filter`: The name of the filter that you used to make this measurement
@@ -395,13 +419,22 @@ def collect_photometry(set_values):
     * `telescope`: Telescope used to take the data. Required if the photometry is X-ray data!
     * `filter_min`: Minimum frequency or wavelength of the filter used. Required for X-ray data!
     * `filter_max`: Maximum frequency or wavelength of the filter used. Required for X-ray data!
+    * `xray_model_name`: A colloquial name for the xray model that was applied to extract fluxes from this data.
+    * `xray_model_param_value::<param_name>`: A special keyword for defining the best fit value for an X-ray model parameter. There can be an arbitrary number of these, but there should be one for each xray model parameter. Every one of these should start with the prefix `xray_model_param_value::`, then after the double colon (`::`), you should insert the name of the parameter (replacing `<param_name>` above). For example, for an absorbed powerlaw there would be two of these like `xray_model_param_value::N_H` and `xray_model_param_value::Gamma`.
+    * `xray_model_param_up_err::<param_name>`: The same as `xray_model_param_value::<param_name>` but for the upper error on the best fit value. There should be the same number of these as there are `xray_model_param_value::<param_name>`!
+    * `xray_model_param_lo_err::<param_name>`: The same as `xray_model_param_value::<param_name>` but for the upper error on the best fit value. There should be the same number of these as there are `xray_model_param_value::<param_name>`!
+    * `xray_model_param_upperlimit::<param_name>`: The same as `xray_model_param_value::<param_name>` but a boolean that is set to True if the parameter value was an upperlimit, or False if not. There should be the same number of these as there are `xray_model_param_value::<param_name>`!
+    * `xray_model_param_unit::<param_name>`: The same as `xray_model_param_value::<param_name>` but a string of the units for the model parameter. There should be the same number of these as there are `xray_model_param_value::<param_name>`!
     * `val_k`: The k-correction value applied. Only required if a k-correction was applied.
     * `val_s`: The s-correction value applied. Required if an s-correction was applied.
     * `val_av`: The value of the applied Milky Way Extinction. Required if the photometry was corrected for Milky Way Extinction.
     * `val_host`: The value of the applied host correction. Required only if the photometry is host subtracted.
     * `val_hostav`: The value of the host extinction. Required if the photometry was corrected for host extinction.
     * `upperlimit`: Boolean. True if this is an upperlimit. In this case, the flux should be given as a 3-sigma upperlimit!
-
+    * `raw`: The raw counts from the telescope, this is mostly only used for X-ray data.
+    * `raw_err`: The error on the raw counts from the telescope.
+    * `raw_units`: The units on the raw counts from the telescope (probably `ct`).
+    
     Then the purely optional columns are:
 
     * `date_err`: The error on the date given. 
@@ -467,6 +500,7 @@ def single_object_upload_form(uploaded_values, tasks):
     ui.input("Discovery Date Bibcode", on_change=partial(set_value, "discovery_date_bibcode"))
 
     ui.input("Classification", on_change=partial(set_value, "proposed_classification"))
+    ui.input("Classification Flag", on_change=partial(set_value, "classification_flag"))
     ui.input("Classification Bibcode", on_change=partial(set_value, "classification_bibcode"))
     
     # photometry
@@ -529,8 +563,7 @@ async def _multi_send_to_vetting(uploaded_values, tasks):
     await asyncio.sleep(0)
 
     try:
-        dataset_id, res = await run.io_bound(
-            redirect_and_send_to_vetting,
+        dataset_id, res = await redirect_and_send_to_vetting(
             uploaded_values,
             tasks,
             input_type="multi"
