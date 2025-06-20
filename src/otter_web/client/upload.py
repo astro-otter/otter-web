@@ -531,8 +531,7 @@ async def _send_single_to_vetting(uploaded_values, tasks):
     await asyncio.sleep(0)
     
     try:
-        dataset_id, res = await run.io_bound(
-            redirect_and_send_to_vetting,
+        dataset_id, res = await redirect_and_send_to_vetting(
             uploaded_values,
             tasks,
             input_type="single"
