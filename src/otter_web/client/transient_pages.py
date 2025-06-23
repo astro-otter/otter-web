@@ -439,7 +439,6 @@ async def transient_subpage(transient_default_name:str):
         var parent = document.getElementById('c{aladin_parent.id}');
         parent.appendChild(el);
         """)
-        print(element)
         
         ui.label(f'Properties').classes("text-h6")
         table = generate_property_table(meta)
@@ -485,7 +484,7 @@ async def transient_subpage(transient_default_name:str):
                     sed_plot = ui.plotly(sed_fig)
                     
                     with ui.row():
-                        ui.number(
+                        dt_input = ui.number(
                             label="dt = ",
                             value=DELTA_T,
                             on_change=lambda e : _update_global_delta_t(
@@ -496,8 +495,11 @@ async def transient_subpage(transient_default_name:str):
                                 meta
                             )
                         )
-
-                        ui.number(
+                        with dt_input.add_slot("prepend"):
+                            with ui.icon("help"):
+                                ui.tooltip("The delta time to split the data by. This is the time range used when grouping the SED data.")
+                        
+                        mintime_input =  ui.number(
                             label="Min. Time = ",
                             value=MIN_T,
                             on_change=lambda e:_update_global_min_t(
@@ -508,8 +510,11 @@ async def transient_subpage(transient_default_name:str):
                                 meta
                             )
                         )
+                        with mintime_input.add_slot("prepend"):
+                            with ui.icon("help"):
+                                ui.tooltip("The minimum time to consider when grouping the dataset.")
 
-                        ui.number(
+                        maxtime_input = ui.number(
                             label="Max. Time = ",
                             value=MAX_T,
                             on_change=lambda e:_update_global_max_t(
@@ -520,6 +525,9 @@ async def transient_subpage(transient_default_name:str):
                                 meta
                             )
                         )
+                        with maxtime_input.add_slot("prepend"):
+                            with ui.icon("help"):
+                                ui.tooltip("The maximum time to consider when grouping the dataset.")
 
                         ui.select(
                             ["Frequency [GHz]", "Wavelength [nm]"],
