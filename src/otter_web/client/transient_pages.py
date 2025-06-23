@@ -19,6 +19,16 @@ from itertools import cycle
 YAXES_IS_REVERSED = False
 SNR_THRESHOLD = 1
 ADS_BASE_URL = "https://ui.adsabs.harvard.edu/abs/"
+ALLOWED_NON_BIBS = {
+    "TNS",
+    "ASAS-SN",
+    "ATLAS",
+    "Pan-STARRS",
+    "GaiaAlerts",
+    "ZTF",
+    "WISeREP",
+    "SOUSA"
+}
 
 DELTA_T = 10
 MIN_T = 0
@@ -247,6 +257,76 @@ def plot_sed(phot, fig, plot, meta):
     plot.update()
         
 def generate_property_table(meta):
+
+    # get all of the references for the metadata table
+    name_refs = []
+    for r in meta["name"]["alias"]:
+        n = r["reference"]
+        if not isinstance(n, list):
+            n = [n]
+        for val in n:
+            if val in ALLOWED_NON_BIBS:
+                name_refs.append(val)
+            else:
+                name_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
+    name_ref_strs_uq = np.unique(name_refs)
+
+    coord_refs = []
+    for r in meta["coordinate"]:
+        n = r["reference"]
+        if not isinstance(n, list):
+            n = [n]
+        for val in n:
+            if val in ALLOWED_NON_BIBS:
+                coord_refs.append(val)
+            else:
+                coord_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
+    coord_ref_strs_uq = np.unique(coord_refs)
+
+    class_ref_strs_uq = ""
+    if "classification" in meta:
+        class_refs = []
+        for r in meta["classification"]["value"]:
+            n = r["reference"]
+            if not isinstance(n, list):
+                n = [n]
+            for val in n:
+                if val in ALLOWED_NON_BIBS:
+                    class_refs.append(val)
+                else:
+                    class_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
+        class_ref_strs_uq = np.unique(class_refs)
+                    
+    redshift_ref_strs_uq = ""
+    if "distance" in meta:
+        redshift_refs = []
+        for r in meta["distance"]:
+            if r["distance_type"] != "redshift": continue
+            n = r["reference"]
+            if not isinstance(n, list):
+                n = [n]
+            for val in n:
+                if val in ALLOWED_NON_BIBS:
+                    redshift_refs.append(val)
+                else:
+                    redshift_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
+        redshift_ref_strs_uq = np.unique(redshift_refs)
+
+    disc_date_ref_strs_uq = ""
+    if "date_reference" in meta:
+        disc_date_refs = []
+        for r in meta["date_reference"]:
+            if r["date_type"] != "discovery": continue
+            n = r["reference"]
+            if not isinstance(n, list):
+                n = [n]
+            for val in n:
+                if val in ALLOWED_NON_BIBS:
+                    disc_date_refs.append(val)
+                else:
+                    disc_date_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
+        disc_date_ref_strs_uq = np.unique(disc_date_refs)
+
     columns = [
         {
             "name": "prop",
@@ -264,8 +344,16 @@ def generate_property_table(meta):
             "sortable": False,
             "align": "left"
         },
+        {
+            "name": "ref",
+            "label": "References",
+            "field": "ref",
+            "required": True,
+            "sortable": False,
+            "align": "left"
+        }
     ]
-
+    
     rows = [
         # list possible aliases
         {
@@ -273,12 +361,18 @@ def generate_property_table(meta):
             'val': "; ".join(
                 [f'{i["value"]}' for i in meta['name']['alias']]
             ),
+            'ref': "; ".join(
+                [r for r in name_ref_strs_uq]
+            )
         },
 
         # give coordinates
         {
             'prop': 'Coordinate',
             'val': meta.get_skycoord().to_string("hmsdms"),
+            'ref': "; ".join(
+                [r for r in coord_ref_strs_uq]
+            )
         }
     ]
 
@@ -290,7 +384,10 @@ def generate_property_table(meta):
         rows.append(
             {
                 'prop': "Classifications (Flag)",
-                "val": f"{classes}"
+                "val": f"{classes}",
+                "ref": "; ".join(
+                    [r for r in class_ref_strs_uq]
+                )
             }   
         )
 
@@ -303,7 +400,10 @@ def generate_property_table(meta):
         rows.append(
             {
                 'prop': "Redshift",
-                "val": z
+                "val": z,
+                "ref": "; ".join(
+                    [r for r in redshift_ref_strs_uq]
+                )
             }
         )
     except KeyError:
@@ -316,7 +416,11 @@ def generate_property_table(meta):
             rows.append(
                 {
                     "prop": "Discovery Date",
-                    "val": default_disc_date.iso
+                    "val": default_disc_date.iso,
+                    "ref": "; ".join(
+                        [r for r in disc_date_ref_strs_uq]
+                    )
+
                 }
             )
             
@@ -327,6 +431,7 @@ def generate_property_table(meta):
         ui.table(columns=columns, rows=rows, row_key="prop", pagination=len(rows))
         .props("flat")
         .classes("w-full")
+        .add_slot("body-cell-ref", '<q-td v-html="props.row.ref"></q-td>')
     )
     
     return table
@@ -562,7 +667,9 @@ async def transient_subpage(transient_default_name:str):
                     all_phot_hrns.append(hrn)
 
             ui.label(f'Photometry Sources:')
+
+            uq_bibs, idx = np.unique(all_phot_refs, return_index=True)
             with ui.list().props('dense'):
-                for bibcode in np.unique(all_phot_refs):
+                for bibcode in uq_bibs:
                     with ui.item():
                         ui.link(bibcode, f"{ADS_BASE_URL}{bibcode}")
