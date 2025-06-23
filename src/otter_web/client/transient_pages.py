@@ -35,7 +35,7 @@ MIN_T = 0
 MAX_T = None
 XAXIS = "Frequency [GHz]"
 
-def plot_lightcurve(phot, obs_label, fig, plot, meta):
+def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
 
     fig.data = [] # clear the data from the figure
     
@@ -44,13 +44,17 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta):
     colors = cmap(np.linspace(0, 1, n_lines))
 
     for (band, grp_all), c in zip(phot.groupby('filter_name'), colors):
-
+        
         # make an approximate cut on "SNR" (really just flux/flux_err)
-
+        
         if obs_label == 'UV/Optical/IR': 
             grp = grp_all[grp_all.converted_flux/grp_all.converted_flux_err > SNR_THRESHOLD]
         else:
             grp = grp_all
+
+        # filter out upperlimits if show_limits is false
+        if not show_limits:
+            grp = grp[~grp.upperlimit]
 
         grp["marker"] = grp.apply(
             lambda row : "triangle-down" if row.upperlimit else "circle",
@@ -561,24 +565,40 @@ async def transient_subpage(transient_default_name:str):
                     plot_lc = ui.plotly(fig_lc)
 
                     plot_options = list(phot_types.keys())
-                    plot_toggle = ui.toggle(
-                        plot_options,
-                        value=plot_options[0],
-                        on_change=lambda e : plot_lightcurve(
-                            phot_types[e.value],
-                            e.value,
-                            fig_lc,
-                            plot_lc,
-                            meta
+
+                    with ui.row():
+                        plot_toggle = ui.toggle(
+                            plot_options,
+                            value=plot_options[0],
+                            on_change=lambda e : plot_lightcurve(
+                                phot_types[e.value],
+                                e.value,
+                                fig_lc,
+                                plot_lc,
+                                meta
+                            )
                         )
-                    )
+
+                        show_limits = ui.checkbox(
+                            "Show Upperlimits?",
+                            value = True,
+                            on_change = lambda e : plot_lightcurve(
+                                phot_types[plot_toggle.value],
+                                plot_toggle.value,
+                                fig_lc,
+                                plot_lc,
+                                meta,
+                                show_limits=bool(e.value)
+                            )
+                        )
                     
                     plot_lightcurve(
                         phot_types[plot_options[0]],
                         plot_options[0],
                         fig_lc,
                         plot_lc,
-                        meta
+                        meta,
+                        show_limits=bool(show_limits.value)
                     )                            
 
                 # SED
