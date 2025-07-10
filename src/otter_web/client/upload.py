@@ -401,7 +401,10 @@ def collect_photometry(set_values):
 
     phot_instructions = """
     Please upload your photometry file here and follow these instructions carefully.
-    This should have the following required columns:
+    Any null or NaN values should be filled with "NaN" to work with NumPy/Pandas. Values
+    like "---" will not work.
+    
+    The photometry csv file should have the following required columns:
 
     * `name`: The same name that you put in your metadata file
     * `bibcode`: The ADS bibcode associated with your publication of this photometry
