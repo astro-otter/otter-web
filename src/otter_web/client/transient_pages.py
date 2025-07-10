@@ -3,6 +3,7 @@ import json
 from nicegui import ui, context
 import numpy as np
 import pandas as pd
+import time
 
 from astropy.time import Time
 
@@ -34,6 +35,9 @@ DELTA_T = 10
 MIN_T = 0
 MAX_T = None
 XAXIS = "Frequency [GHz]"
+
+import logging
+logger = logging.getLogger("otter-log")
 
 def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
 
@@ -150,11 +154,9 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
         dict(
             xaxis = dict(
                 title='Date',
-                range=date_range
             ),
             yaxis = dict(
                 title=ylabel,
-                range=phot_range,
                 type=yaxis_type
             ),
         )
@@ -459,20 +461,48 @@ def _update_global_xaxis(new_xaxis, *args, **kwargs):
     global XAXIS
     XAXIS = new_xaxis
     plot_sed(*args, **kwargs)
-    
+
+async def _load_phot(db, transient_default_name, obs_types, label_map):
+    phot_types = {}
+    for obs_type, u in obs_types.items():
+        try:
+            phot = db.get_phot(
+                names = transient_default_name,
+                flux_unit = u,
+                date_unit = 'iso',
+                return_type = 'pandas',
+                obs_type = obs_type
+            )
+            phot_types[label_map[obs_type]] = phot
+            
+        except FailedQueryError:
+            pass
+
+    try:
+        allphot = db.get_phot(
+            names = transient_default_name,
+            flux_unit = "Jy",
+            date_unit = "mjd",
+            return_type = "pandas"
+        )
+    except FailedQueryError:
+        allphot = None
+        
+    return allphot, phot_types
+
 @ui.page(os.path.join(WEB_BASE_URL, 'transient', '{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
     global DELTA_T
     global MIN_T
     global MAX_T
-    
+
+    logger.info("Connecting to the database and loading metadata...")
     db = Otter(url=API_URL)
     meta = db.get_meta(names=transient_default_name)[0]
     dataset = db.query(names=transient_default_name)[0]
     json_data = json.dumps(dict(dataset), indent=4)
     
-    phot_types = {}
     obs_types = {
         'radio':'mJy',
         'uvoir':'mag(AB)',
@@ -484,32 +514,22 @@ async def transient_subpage(transient_default_name:str):
         'uvoir' : 'UV/Optical/IR'
     }
 
-    for obs_type, u in obs_types.items():
-        try:
-            phot = db.get_phot(
-                names = transient_default_name,
-                flux_unit = u,
-                date_unit = 'iso',
-                return_type = 'pandas',
-                obs_type = obs_type
-            )
-            phot_types[label_map[obs_type]] = phot
-
-            allphot = db.get_phot(
-                names = transient_default_name,
-                flux_unit = "Jy",
-                date_unit = "mjd",
-                return_type = "pandas"
-            )
-            
-        except FailedQueryError:
-            pass
-        
+    start = time.time()
+    logger.info("Loading photometry...")
+    allphot, phot_types = await _load_phot(
+        db,
+        transient_default_name,
+        obs_types,
+        label_map
+    )
+    logger.info(f"Loading the photometry took {time.time()-start}s")
+    
     hasphot = len(phot_types) > 0
 
     fov_arcmin = 1.5
     fov_deg = fov_arcmin / 60
 
+    logger.info("Adding aladin viewer and photometry plots...")
     with frame():
 
         with ui.grid(columns=6):
@@ -693,3 +713,5 @@ async def transient_subpage(transient_default_name:str):
                 for bibcode in uq_bibs:
                     with ui.item():
                         ui.link(bibcode, f"{ADS_BASE_URL}{bibcode}")
+
+        logger.info("Successfully load the page!")

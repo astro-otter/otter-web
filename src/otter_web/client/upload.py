@@ -410,8 +410,8 @@ def collect_photometry(set_values):
     * `flux_unit`: The unit on the flux measurement.
     * `date`: The date you took this flux measurement
     * `date_format`: The astropy time string format that you used for this date
-    * `filter`: The name of the filter that you used to make this measurement
-    * `filter_eff`: The effective wavelength or frequency of the filter. We will use the filter_eff_units key to determine this. Please provide this if the filter you used in atypical or obscure, we have a lot of these values already stored but not all of them!
+    * `filter`: The name of the filter that you used to make this measurement. This must be unique with filter_eff. So, for example, you can not have multiple "r" filters with different filter_eff. We generally suggest dealing with this by naming your filters <filter_name>.<telescope_name>, for example "r.ztf".
+    * `filter_eff`: The effective wavelength or frequency of the filter. We will use the filter_eff_units key to determine this.
     * `filter_eff_units`: The units of filter_eff.
     
     Then there are some columns that are required in some cases:

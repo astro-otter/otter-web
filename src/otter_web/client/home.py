@@ -116,12 +116,22 @@ def _post_table(events:List[dict]) -> None:
     )
     table.on(
         'rowClick',
-        lambda e : ui.navigate.to(
-            os.path.join(
-                WEB_BASE_URL,
-                'transient',
-                f'{e.args[1]["name"]}'
-            )
+        _row_click_navigate 
+    )
+
+async def _row_click_navigate(e):
+    ui.notification(
+        "Loading the page...",
+        type="ongoing",
+        timeout=None,
+        spinner = True,
+        close_button=True
+    )
+    ui.navigate.to(
+        os.path.join(
+            WEB_BASE_URL,
+            'transient',
+            f'{e.args[1]["name"]}'
         )
     )
 
