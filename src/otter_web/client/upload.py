@@ -172,6 +172,10 @@ def validate_and_save_phot(e, save_values):
         ui.notify("Unable to finish your upload because pandas can't parse this file!")
         raise InvalidInputError() from exc
 
+    # drop rows that are entirely blank (this can happen when exporting csvs from excel
+    # and google sheets)
+    df = df.dropna(how="all")
+    
     # make sure all of the required columns are there
     required_columns = [
         "name",
@@ -218,6 +222,10 @@ def validate_and_save_meta(e, save_values):
         e.sender.reset()
         raise InvalidInputError() from exc
 
+    # drop rows that are entirely blank (this can happen when exporting csvs from excel
+    # and google sheets)
+    df = df.dropna(how="all")
+    
     required_columns = [
         "name",
         "ra",
