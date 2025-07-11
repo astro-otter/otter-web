@@ -417,7 +417,7 @@ def collect_photometry(set_values):
     * `name`: The same name that you put in your metadata file
     * `bibcode`: The ADS bibcode associated with your publication of this photometry
     * `flux`: The flux, flux density, or magnitude. If you are uploading counts, see the `raw` keyword below, which needs to be provided along with this. If the `raw` keyword is also used, this will be treated as a value after reduction (i.e. going into the `value` keyword in the schema). If this column is provided and not `raw`, it will be treated as the default raw value for this photometry point. 
-    * `flux_err`: The error on the photometry value given.
+    * `flux_err`: The error on the photometry value given. If the uncertainties are uneven, make this the mean of the upper and lower errors and add the upper and lower errors using the `upper_err` and `lower_err` columns, respectively (see below).
     * `flux_unit`: The unit on the flux measurement.
     * `date`: The date you took this flux measurement
     * `date_format`: The astropy time string format that you used for this date
@@ -448,7 +448,9 @@ def collect_photometry(set_values):
     
     Then the purely optional columns are:
 
-    * `date_err`: The error on the date given. 
+    * `date_err`: The error on the date given.
+    * `date_min`: The first observation date for when observations have been binned. If provided, `date_max` is required.
+    * `date_max`: The last observation date for when observations have been binned. If provided, `date_min` is required.
     * `sigma`: Significance of the upperlimit (if it is an upperlimit).
     * `instrument`: The instrument used to collect this data.
     * `phot_type`: is the photometry PSF, Aperature, or synthetic.
@@ -457,6 +459,11 @@ def collect_photometry(set_values):
     * `observer`: Name of the observer for this point.
     * `reducer`: Name of the person who reduced this data point.
     * `pipeline`: Name and version of the pipeline used to reduce this data.
+    * `statistical_err`: The statistical error on the flux value.
+    * `systematic_err`: The systematic error on the flux value.
+    * `iss_err`: Any uncertainties associated with interstellar scintillation.
+    * `upper_err`: The upper error, if the flux errors are uneven.
+    * `lower_err`: The lower error, if the flux errors are uneven.
     """
     
     with ui.grid(columns=2):

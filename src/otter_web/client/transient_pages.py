@@ -41,6 +41,12 @@ logger = logging.getLogger("otter-log")
 
 def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
 
+    if len(phot) == 0:
+        for trace in fig.data:
+            trace.visible = 'legendonly'
+        plot.update()
+        return
+
     fig.data = [] # clear the data from the figure
     
     cmap = mpl.colormaps['jet']
@@ -611,7 +617,32 @@ async def transient_subpage(transient_default_name:str):
                                 show_limits=bool(e.value)
                             )
                         )
-                    
+
+                        ui.button(
+                            "Clear All",
+                            on_click = lambda : plot_lightcurve(
+                                [], # pass an empty phot dataframe
+                                plot_toggle.value,
+                                fig_lc,
+                                plot_lc,
+                                meta,
+                                show_limits=bool(show_limits.value)
+                            )
+                        )
+
+                        ui.button(
+                            "Plot All",
+                            on_click = lambda : plot_lightcurve(
+                                phot_types[plot_toggle.value],
+                                plot_toggle.value,
+                                fig_lc,
+                                plot_lc,
+                                meta,
+                                show_limits=bool(show_limits.value)
+                            )
+                        )
+
+                        
                     plot_lightcurve(
                         phot_types[plot_options[0]],
                         plot_options[0],
