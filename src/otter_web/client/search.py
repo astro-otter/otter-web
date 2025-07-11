@@ -28,16 +28,27 @@ class SearchInput:
 
         if hasattr(e.value, '__len__') and len(e.value) == 0:
             return # we don't want to set anything
-        
+
+        if key == "mindec" and e.value is None:
+            e.value = -90
+
+        if key == "maxdec" and e.value is None:
+            e.value = 90
+            
         self.search_kwargs[key] = e.value
 
     add_name = partialmethod(update, key='names')
+    add_mindec = partialmethod(update, key="mindec")
+    add_maxdec = partialmethod(update, key="maxdec")
     add_minz = partialmethod(update, key='minz')
     add_maxz = partialmethod(update, key='maxz')
     add_ra = partialmethod(update, key='ra')
     add_dec = partialmethod(update, key='dec')
     add_radius = partialmethod(update, key='radius')
     add_hasphot = partialmethod(update, key='hasphot')
+    add_hasradiophot = partialmethod(update, key="has_radio_phot")
+    add_hasuvoirphot = partialmethod(update, key="has_uvoir_phot")
+    add_hasxrayphot = partialmethod(update, key="has_xray_phot")
     add_spec_classed = partialmethod(update, key='spec_classed')
     add_unambiguous = partialmethod(update, key='unambiguous')
     add_ra_unit = partialmethod(update, key='ra_unit')
@@ -111,7 +122,7 @@ def do_search(search_input, search_results, post_table):
     logger.debug(search_input.search_kwargs)
     res = db.get_meta(**search_input.search_kwargs)
     search_results.results = res
-    logger.info(res)
+    # logger.info(res)
     post_table.refresh(res)
     ui.notify("Search Completed!")
 
@@ -196,6 +207,19 @@ def search_form(search_results, post_table):
             )
 
         with ui.row():
+            mindec = ui.number(
+                "Minimum Declination (degrees)",
+                placeholder="Enter a minimum declination",
+                on_change = search_input.add_mindec
+            )
+
+            maxdec = ui.number(
+                "Maximum Declination (degrees)",
+                placeholder="Enter a maximum declination",
+                on_change = search_input.add_maxdec
+            )
+
+        with ui.row():
             hasphot = ui.checkbox(
                 "Has Photometry?",
                 on_change = search_input.add_hasphot
@@ -209,6 +233,22 @@ def search_form(search_results, post_table):
             unambiguous = ui.checkbox(
                 "Unambiguously Classified?",
                 on_change = search_input.add_unambiguous
+            )
+
+        with ui.row():
+            hasradiophot = ui.checkbox(
+                "Has Radio Photometry?",
+                on_change = search_input.add_hasradiophot
+            )
+
+            hasuvoirphot = ui.checkbox(
+                "Has UV/Optical/IR Photometry?",
+                on_change = search_input.add_hasuvoirphot
+            )
+
+            hasxrayphot = ui.checkbox(
+                "Has X-ray Photometry?",
+                on_change = search_input.add_hasxrayphot
             )
 
         
