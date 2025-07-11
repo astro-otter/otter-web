@@ -606,6 +606,9 @@ async def transient_subpage(transient_default_name:str):
                             )
                         )
 
+                        if len(plot_options) == 1:
+                            plot_toggle.disable() # we don't want to show it
+                        
                         show_limits = ui.checkbox(
                             "Show Upperlimits?",
                             value = True,
