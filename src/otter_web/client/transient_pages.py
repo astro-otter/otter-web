@@ -263,6 +263,7 @@ def plot_sed(phot, fig, plot, meta):
                 type="log",
                 exponentformat = exp_form
             ),
+            legend_title_text = "Time Since Discovery",
         )
     )
 
