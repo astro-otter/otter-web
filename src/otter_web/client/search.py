@@ -132,72 +132,84 @@ def search_form(search_results, post_table):
 
     search_input = SearchInput()
 
-    with ui.grid(columns=3):
-        names = ui.input(
-            'Transient Name',
-            placeholder='Enter a transient name or partial name',
-            on_change = search_input.add_name
-        )
+    classes = {
+        c:c for c in util._KNOWN_CLASS_ROOTS
+    }
+    classes[None] = "Select a classification..."
+    
+    with ui.column():
+        with ui.row():
+            names = ui.input(
+                'Transient Name',
+                placeholder='Enter a transient name or partial name',
+                on_change = search_input.add_name
+            )
 
-        ra = ui.input(
-            'RA',
-            placeholder='Enter an RA',
-            on_change = search_input.add_ra
-        )
+            searchclass = ui.select(
+                classes,
+                label = 'Select a classification...',
+                value = None,
+                on_change = search_input.add_classification,
+                clearable = True
+            )
+            
+        with ui.row():
+            ra = ui.input(
+                'RA',
+                placeholder='Enter an RA',
+                on_change = search_input.add_ra
+            )
 
-        radius = ui.number(
-            'Search Radius (")',
-            placeholder='Default is 5"',
-            on_change = search_input.add_radius
-        )
+            dec = ui.input(
+                'Declination (deg.)',
+                placeholder='Enter a Dec. (deg.)',
+                on_change = search_input.add_dec
+            )
 
-        searchclass = ui.select(
-            util._KNOWN_CLASS_ROOTS,
-            label = 'Classification',
-            on_change = search_input.add_classification
-        )
+            
+            radius = ui.number(
+                'Search Radius (")',
+                placeholder='Default is 5"',
+                on_change = search_input.add_radius
+            )
 
-        dec = ui.input(
-            'Declination (deg.)',
-            placeholder='Enter a Dec. (deg.)',
-            on_change = search_input.add_dec
-        )
+            unit_options = ['hourangle', 'degree']
+            ra_unit = ui.select(
+                unit_options,
+                label = 'RA Unit',
+                value = unit_options[0],
+                on_change = search_input.add_ra_unit
+            )
+            search_input.add_ra_unit(ra_unit)
 
-        maxz = ui.number(
-            'Maximum Redshift',
-            placeholder='Enter a maximum redshift',
-            on_change = search_input.add_maxz
-        )
-        
-        unit_options = ['hourangle', 'degree']
-        ra_unit = ui.select(
-            unit_options,
-            label = 'RA Unit',
-            value = unit_options[0],
-            on_change = search_input.add_ra_unit
-        )
-        search_input.add_ra_unit(ra_unit)
-        
-        minz = ui.number(
-            'Minimum Redshift',
-            placeholder='Enter a minimum redshift',
-            on_change = search_input.add_minz
-        )
+        with ui.row():
+            maxz = ui.number(
+                'Maximum Redshift',
+                placeholder='Enter a maximum redshift',
+                on_change = search_input.add_maxz
+            )
+                
+            minz = ui.number(
+                'Minimum Redshift',
+                placeholder='Enter a minimum redshift',
+                on_change = search_input.add_minz
+            )
 
-        hasphot = ui.checkbox(
-            "Has Photometry?",
-            on_change = search_input.add_hasphot
-        )
-
-        hasspecclass = ui.checkbox(
-            "Spectroscopically Confirmed?",
-            on_change = search_input.add_spec_classed
-        )
-
-        unambiguous = ui.checkbox(
-            "Unambiguously Classified?",
-            on_change = search_input.add_unambiguous
-        )
+        with ui.row():
+            hasphot = ui.checkbox(
+                "Has Photometry?",
+                on_change = search_input.add_hasphot
+            )
+            
+            hasspecclass = ui.checkbox(
+                "Spectroscopically Confirmed?",
+                on_change = search_input.add_spec_classed
+            )
+            
+            unambiguous = ui.checkbox(
+                "Unambiguously Classified?",
+                on_change = search_input.add_unambiguous
+            )
 
         
     ui.button('Submit').props('type="submit"').on_click(
