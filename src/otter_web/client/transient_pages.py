@@ -39,6 +39,23 @@ XAXIS = "Frequency [GHz]"
 import logging
 logger = logging.getLogger("otter-log")
 
+def _derive_marker(row):
+
+    if row.upperlimit:
+        base_marker = "triangle-down"
+    else:
+        if not (pd.isna(row.corr_host) or row.corr_host):
+            # if the data is not host subtracted
+            base_marker = "square"
+        else:
+            # if the data is host subtracted OR it is nan
+            base_marker = "circle"
+
+    if pd.isna(row.corr_host) and row.obs_type in {"uvoir", "radio"}:
+        base_marker += "-open"
+
+    return base_marker
+        
 def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
 
     if len(phot) == 0:
@@ -66,11 +83,8 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
         if not show_limits:
             grp = grp[~grp.upperlimit]
 
-        grp["marker"] = grp.apply(
-            lambda row : "triangle-down" if row.upperlimit else "circle",
-            axis = 1
-        )
-
+        grp["marker"] = grp.apply(_derive_marker, axis=1)
+        
         grp["converted_flux_err"] = grp.apply(
             lambda row : None if row.upperlimit else row.converted_flux_err,
             axis = 1
@@ -224,10 +238,7 @@ def plot_sed(phot, fig, plot, meta):
             curr_time += dt
             continue
 
-        grp["marker"] = grp.apply(
-            lambda row : "triangle-down" if row.upperlimit else "circle",
-            axis = 1
-        )
+        grp["marker"] = grp.apply(_derive_marker, axis=1)
 
         grp["converted_flux_err"] = grp.apply(
             lambda row : None if row.upperlimit else row.converted_flux_err,
@@ -478,7 +489,8 @@ async def _load_phot(db, transient_default_name, obs_types, label_map):
                 flux_unit = u,
                 date_unit = 'iso',
                 return_type = 'pandas',
-                obs_type = obs_type
+                obs_type = obs_type,
+                keep_raw = True
             )
             phot_types[label_map[obs_type]] = phot
             
@@ -490,7 +502,8 @@ async def _load_phot(db, transient_default_name, obs_types, label_map):
             names = transient_default_name,
             flux_unit = "Jy",
             date_unit = "mjd",
-            return_type = "pandas"
+            return_type = "pandas",
+            keep_raw = True
         )
     except FailedQueryError:
         allphot = None
@@ -533,16 +546,28 @@ async def transient_subpage(transient_default_name:str):
     
     hasphot = len(phot_types) > 0
 
+    ambiguous_host_subtraction = np.any(
+        pd.isna(allphot.corr_host) * (allphot.obs_type != "xray")
+    )
+    
     fov_arcmin = 1.5
     fov_deg = fov_arcmin / 60
 
     logger.info("Adding aladin viewer and photometry plots...")
     with frame():
 
+        if ambiguous_host_subtraction:
+            ui.notification(
+                "WARNING! It is unclear whether some of this photometry is host subtracted! (Open circles)",
+                type = "warning",
+                close_button = True,
+                timeout = None
+            )
+        
         with ui.grid(columns=6):
             with ui.column().classes("align-left col-span-2"):
                 with ui.row():
-                    ui.label(f'{transient_default_name}').classes("text-h4")
+                    ui.label(f'{transient_default_name}').classes("text-h2")
                 with ui.row():
                     ui.button(
                         "Download Dataset",
@@ -576,18 +601,28 @@ async def transient_subpage(transient_default_name:str):
         parent.appendChild(el);
         """)
         
-        ui.label(f'Properties').classes("text-h6")
+        ui.label(f'Properties').classes("text-h4")
         table = generate_property_table(meta)
         
         if hasphot:
             # ui.label(f'Plots').classes("text-h3")
 
             with ui.row().classes('w-full gap-10'):
-                
+
+                ui.label(f'Photometry Plots').classes("text-h4")
+                ui.restructured_text('''
+                    **Note the various types of markers:**
+
+                    - *Solid Circle*: Data is host subtracted and stored that way.
+                    - *Solid Square*: Data is not host subtracted. We tend to prefer storing data this way to enable users to host subtract as they prefer.
+                    - *Open Circle*: It is unclear whether this data was host subtracted. Please use caution when analyzing it.
+                    - *Downward Triangle*: Upperlimit.
+                ''')
+
                 # Light curves
                 with ui.column():
                     ui.label(f'Light Curves').classes("text-h6")
-                    
+                                    
                     fig_lc = go.Figure()
                     plot_lc = ui.plotly(fig_lc)
 
@@ -741,7 +776,7 @@ async def transient_subpage(transient_default_name:str):
                 else:
                     all_phot_hrns.append(hrn)
 
-            ui.label(f'Photometry Sources:')
+            ui.label(f'Photometry Sources:').classes("text-h6")
 
             uq_bibs, idx = np.unique(all_phot_refs, return_index=True)
             with ui.list().props('dense'):
