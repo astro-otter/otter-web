@@ -44,14 +44,14 @@ def _derive_marker(row):
     if row.upperlimit:
         base_marker = "triangle-down"
     else:
-        if not (pd.isna(row.corr_host) or row.corr_host):
+        if "corr_host" in row and not (pd.isna(row.corr_host) or row.corr_host):
             # if the data is not host subtracted
             base_marker = "square"
         else:
             # if the data is host subtracted OR it is nan
             base_marker = "circle"
 
-    if pd.isna(row.corr_host) and row.obs_type in {"uvoir", "radio"}:
+    if "corr_host" not in row or (pd.isna(row.corr_host) and row.obs_type in {"uvoir", "radio"}):
         base_marker += "-open"
 
     return base_marker
@@ -545,24 +545,12 @@ async def transient_subpage(transient_default_name:str):
     logger.info(f"Loading the photometry took {time.time()-start}s")
     
     hasphot = len(phot_types) > 0
-
-    ambiguous_host_subtraction = np.any(
-        pd.isna(allphot.corr_host) * (allphot.obs_type != "xray")
-    )
     
     fov_arcmin = 1.5
     fov_deg = fov_arcmin / 60
 
     logger.info("Adding aladin viewer and photometry plots...")
     with frame():
-
-        if ambiguous_host_subtraction:
-            ui.notification(
-                "WARNING! It is unclear whether some of this photometry is host subtracted! (Open circles)",
-                type = "warning",
-                close_button = True,
-                timeout = None
-            )
         
         with ui.grid(columns=6):
             with ui.column().classes("align-left col-span-2"):
@@ -607,6 +595,19 @@ async def transient_subpage(transient_default_name:str):
         if hasphot:
             # ui.label(f'Plots').classes("text-h3")
 
+            ambiguous_host_subtraction = "corr_host" not in allphot or np.any(
+                pd.isna(allphot.corr_host) * (allphot.obs_type != "xray")
+            )
+
+            if ambiguous_host_subtraction:
+                ui.notification(
+                    "WARNING! It is unclear whether some of this photometry is host subtracted! (Open circles)",
+                    type = "warning",
+                    close_button = True,
+                    timeout = None
+                )
+
+            
             with ui.row().classes('w-full gap-10'):
 
                 ui.label(f'Photometry Plots').classes("text-h4")
