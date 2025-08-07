@@ -297,11 +297,11 @@ async def redirect_and_send_to_vetting(
         )
 
         if upload_input.redshift is not None:
-            meta_dict["redshift"] = [int(upload_input.redshift)]
+            meta_dict["redshift"] = [float(upload_input.redshift)]
             meta_dict["redshift_bibcode"] = [str(upload_input.redshift_bibcode)]
 
         if upload_input.lum_dist is not None:
-            meta_dict["luminosity_distance"] = [int(upload_input.lum_dist)]
+            meta_dict["luminosity_distance"] = [float(upload_input.lum_dist)]
             meta_dict["luminosity_distance_unit"] = [upload_input.lum_dist_unit]
             meta_dict["luminosity_distance_bibcode"] = [str(upload_input.lum_dist_bibcode)]
 
