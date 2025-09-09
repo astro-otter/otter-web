@@ -10,6 +10,24 @@ from otter import Otter, Transient
 
 db = Otter(url=API_URL)
 
+OTTER_BIBTEX = """
+@ARTICLE{2025arXiv250905405F,
+       author = {{Franz}, Noah and {Alexander}, Kate D and {Gomez}, Sebastian and {Christy}, Collin T and {Laskar}, Tanmoy and {van Velzen}, Sjoert and {Earl}, Nicholas and {Gezari}, Suvi and {Karmen}, Mitchell and {Margutti}, Raffaella and {Pearson}, Jeniveve and {Villar}, V. Ashley and {Zabludoff}, Ann I},
+        title = "{The Open mulTiwavelength Transient Event Repository (OTTER): Infrastructure Release and Tidal Disruption Event Catalog}",
+      journal = {arXiv e-prints},
+     keywords = {High Energy Astrophysical Phenomena, Instrumentation and Methods for Astrophysics},
+         year = 2025,
+        month = sep,
+          eid = {arXiv:2509.05405},
+        pages = {arXiv:2509.05405},
+archivePrefix = {arXiv},
+       eprint = {2509.05405},
+ primaryClass = {astro-ph.HE},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250905405F},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+"""
+
 @ui.page(os.path.join(WEB_BASE_URL, "citing"))
 async def citing_us_page():
 
@@ -80,9 +98,7 @@ _Disclaimer:_ We have done our best include every possible citation. But, as you
         ui.label(
             "Citation for the OTTER Catalog Paper"
         ).classes("text-h4")
-        ui.code(
-	  "INSERT CITATION HERE ONCE THE CATALOG IS PUBLISHED"
-        ).classes("full-width")
+        ui.code(OTTER_BIBTEX).classes("full-width")
 
 @ui.refreshable    
 def display_object_list(object_list:list[Transient]):
@@ -148,5 +164,5 @@ def generate_bibtex_file():
         type="negative"
     )
         
-    return bibtex.encode("utf-8")
+    return (bibtex+OTTER_BIBTEX).encode("utf-8")
     
