@@ -1,4 +1,5 @@
 import os
+import io
 import json
 from nicegui import ui, context
 import numpy as np
@@ -544,6 +545,9 @@ async def transient_subpage(transient_default_name:str):
         obs_types,
         label_map
     )
+    allphot_str = io.BytesIO()
+    allphot.to_csv(allphot_str, index=False, encoding="utf-8")
+
     logger.info(f"Loading the photometry took {time.time()-start}s")
     
     hasphot = len(phot_types) > 0
@@ -560,12 +564,21 @@ async def transient_subpage(transient_default_name:str):
                     ui.label(f'{transient_default_name}').classes("text-h2")
                 with ui.row():
                     ui.button(
-                        "Download Dataset",
+                        "Download Full Dataset (JSON)",
                         on_click=lambda: ui.download(
                             bytes(json_data, encoding="utf-8"),
                             f"{transient_default_name}.json"
                         )
                     )
+                if hasphot:
+                    with ui.row():
+                        ui.button(
+                            "Download Cleaned Photometry (CSV)",
+                            on_click=lambda: ui.download(
+                                allphot_str.getvalue(),
+                                f"{transient_default_name}-cleaned-photometry.csv"
+                            )
+                        )
 
             with ui.column().classes("col-span-3"):
                 ui.element("div")
