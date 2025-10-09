@@ -410,7 +410,7 @@ def generate_property_table(meta):
         {
             'prop': 'E(B-V)',
             'val': sfd(meta.get_skycoord()),
-            'ref': 'SFD'
+            'ref': f'<u><a href="https://ui.adsabs.harvard.edu/abs/1998ApJ...500..525S/abstract">SFD</a></u>'
         }
     ]
 
