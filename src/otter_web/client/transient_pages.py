@@ -8,7 +8,9 @@ import time
 
 from astropy.time import Time
 
+from dustmaps.config import config
 from dustmaps.sfd import SFDQuery
+config["data_dir"] = os.path.abspath(__file__)
 
 from ..theme import frame
 from ..config import API_URL, WEB_BASE_URL

@@ -5,7 +5,9 @@ tmpdir = "src/otter_web/tmp"
 if not os.path.exists(tmpdir):
     os.mkdir(tmpdir)
 
+from dustmaps.config import config
 import dustmaps.sfd
+
 from nicegui import ui, app
 from otter_web.client import *
 from otter_web.config import *
@@ -28,6 +30,12 @@ def main():
     args = parser.parse_args()
 
     # fetch the SFD fits file, if not there already
+    config["data_dir"] = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "src",
+        "otter_web",
+        "client"
+    )
     dustmaps.sfd.fetch()
     
     if args.on_air:

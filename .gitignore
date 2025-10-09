@@ -58,3 +58,4 @@ src/otter_web/tmp/*/*.csv
 src/otter_web/tmp/*/*.txt
 src/otter_wep/tmp/*
 .nicegui/*
+src/otter_web/client/sfd/*
