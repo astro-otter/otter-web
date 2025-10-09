@@ -179,7 +179,8 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
                 title=ylabel,
                 type=yaxis_type
             ),
-        )
+        ),
+        autosize=False
     )
         
     if obs_label == 'UV/Optical/IR':
@@ -275,7 +276,8 @@ def plot_sed(phot, fig, plot, meta):
                 exponentformat = exp_form
             ),
             legend_title_text = "Time Since Discovery",
-        )
+        ),
+        autosize=False
     )
 
     plot.update()
