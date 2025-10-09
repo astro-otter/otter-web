@@ -46,6 +46,7 @@ class SearchInput:
     add_dec = partialmethod(update, key='dec')
     add_radius = partialmethod(update, key='radius')
     add_hasphot = partialmethod(update, key='hasphot')
+    add_hasdet = partialmethod(update, key='has_det')
     add_hasradiophot = partialmethod(update, key="has_radio_phot")
     add_hasuvoirphot = partialmethod(update, key="has_uvoir_phot")
     add_hasxrayphot = partialmethod(update, key="has_xray_phot")
@@ -53,7 +54,8 @@ class SearchInput:
     add_unambiguous = partialmethod(update, key='unambiguous')
     add_ra_unit = partialmethod(update, key='ra_unit')
     add_classification = partialmethod(update, key='classification')
-
+    add_wave_det = partialmethod(update, key="wave_det")
+    
 @dataclass
 class SearchResults:
     results: list[dict]
@@ -147,6 +149,13 @@ def search_form(search_results, post_table):
         c:c for c in util._KNOWN_CLASS_ROOTS
     }
     classes[None] = "Select a classification..."
+
+    wave_dets_labels = {
+        "radio": "Radio",
+        "uvoir": "UV/Optical/IR",
+        "xray": "X-ray",
+        None:"Select a wavelength regime..."
+    }
     
     with ui.column():
         with ui.row():
@@ -251,6 +260,19 @@ def search_form(search_results, post_table):
                 on_change = search_input.add_hasxrayphot
             )
 
+        with ui.row():
+            hasdet = ui.checkbox(
+                "Is Detected?",
+                on_change = search_input.add_hasdet
+            )
+            wavedet = ui.select(
+                wave_dets_labels,
+                label = 'Select the wavelength regime you want to check for detections in...',
+                value = None,
+                on_change = search_input.add_wave_det,
+                clearable = True
+
+            )
         
     ui.button('Submit').props('type="submit"').on_click(
         lambda: do_search(
