@@ -223,7 +223,7 @@ def plot_sed(phot, fig, plot, meta):
     min_t = max(phot.dt.min(), start_time)
     
     cmap = mpl.colormaps['jet']
-    n_lines = int((max_t - min_t) // dt)
+    n_lines = int(abs(max_t - min_t) // dt)
     colors = cmap(np.linspace(0, 1, n_lines))
     
     color_idx = 0 
@@ -556,8 +556,9 @@ async def transient_subpage(transient_default_name:str):
         obs_types,
         label_map
     )
-    allphot_str = io.BytesIO()
-    allphot.to_csv(allphot_str, index=False, encoding="utf-8")
+    if allphot is not None:
+        allphot_str = io.BytesIO()
+        allphot.to_csv(allphot_str, index=False, encoding="utf-8")
 
     logger.info(f"Loading the photometry took {time.time()-start}s")
     
