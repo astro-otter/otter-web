@@ -396,7 +396,7 @@ def generate_property_table(meta):
         # give coordinates
         {
             'prop': 'Coordinate',
-            'val': meta.get_skycoord().to_string("hmsdms"),
+            'val': f"{meta.get_skycoord().to_string('hmsdms', precision=2)} ({meta.get_skycoord().to_string('decimal', precision=4)})",
             'ref': "; ".join(
                 [r for r in coord_ref_strs_uq]
             )
