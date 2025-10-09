@@ -37,7 +37,7 @@ ALLOWED_NON_BIBS = {
 DELTA_T = 10
 MIN_T = 0
 MAX_T = None
-XAXIS = "Frequency [GHz]"
+XAXIS = "Observed Frequency [GHz]"
 
 import logging
 logger = logging.getLogger("otter-log")
@@ -229,9 +229,9 @@ def plot_sed(phot, fig, plot, meta):
     color_idx = 0 
     curr_time = start_time
 
-    if xaxis == "Frequency [GHz]":
+    if xaxis == "Observed Frequency [GHz]":
         xaxis_key = "converted_freq"
-    elif xaxis == "Wavelength [nm]":
+    elif xaxis == "Observed Wavelength [nm]":
         xaxis_key = "converted_wave"
 
     while curr_time+dt < max_t:
@@ -772,8 +772,8 @@ async def transient_subpage(transient_default_name:str):
                                 ui.tooltip("The maximum time to consider when grouping the dataset.")
 
                         ui.select(
-                            ["Frequency [GHz]", "Wavelength [nm]"],
-                            value = "Frequency [GHz]",
+                            ["Observed Frequency [GHz]", "Observed Wavelength [nm]"],
+                            value = "Observed Frequency [GHz]",
                             label='x-axis',
                             on_change=lambda e : _update_global_xaxis(
                                 e.value,
