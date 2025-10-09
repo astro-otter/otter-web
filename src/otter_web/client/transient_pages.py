@@ -8,6 +8,8 @@ import time
 
 from astropy.time import Time
 
+from dustmaps.sfd import SFDQuery
+
 from ..theme import frame
 from ..config import API_URL, WEB_BASE_URL
 
@@ -285,6 +287,8 @@ def plot_sed(phot, fig, plot, meta):
         
 def generate_property_table(meta):
 
+    sfd = SFDQuery() # for getting the ebv
+    
     # get all of the references for the metadata table
     name_refs = []
     for r in meta["name"]["alias"]:
@@ -400,6 +404,13 @@ def generate_property_table(meta):
             'ref': "; ".join(
                 [r for r in coord_ref_strs_uq]
             )
+        },
+
+        # give E(B-V)
+        {
+            'prop': 'E(B-V)',
+            'val': sfd(meta.get_skycoord()),
+            'ref': 'SFD'
         }
     ]
 
