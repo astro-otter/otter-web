@@ -86,14 +86,7 @@ def vetting() -> None:
             },
         ]
 
-        ui.label("Datasets to be Vetted").classes("text-h5")
-        
-        table = (
-            ui.table(columns=columns, rows=[], row_key="id", pagination=10)
-            .props("flat")
-            .classes("w-full")
-        )
-
+        rows = []
         conn = Connection(
             username="vetting-user",
             password=vetting_password,
@@ -102,7 +95,6 @@ def vetting() -> None:
 
         db = Database(conn, "otter")
         transients_to_vet = db.AQLQuery("FOR t IN vetting RETURN t")
-        
         for t in transients_to_vet:
             comment = t["schema_version"]["comment"].split("|")
             name, email = comment[0:2]
@@ -110,7 +102,7 @@ def vetting() -> None:
             name = name.replace("Uploader:", "").strip()
             email = email.replace("Email:", "").strip()
             approved = "approved" in t["schema_version"]["comment"].lower()
-            table.add_rows(
+            rows.append(
                 {
                     "approved" : "Yes" if approved else "Not yet!",
                     "dataset_id": t["_id"],
@@ -119,6 +111,15 @@ def vetting() -> None:
                 }
             )
 
+        
+        ui.label("Datasets to be Vetted").classes("text-h5")
+        
+        table = (
+            ui.table(columns=columns, rows=rows, row_key="id", pagination=10)
+            .props("flat")
+            .classes("w-full")
+        )
+        
         table.add_slot(
             'body-cell-title',
             r'<td><a :href="props.row.url">{{ props.row.title }}</a></td>'
@@ -195,7 +196,7 @@ If you have major changes, please contact the uploader via the information below
         async def save_data():
             global transient_to_approve
             data = await editor.run_editor_method("get")
-            transient_to_approve = eval(data['text'])
+            transient_to_approve = data['json']
             ui.notify("Changes saved!")
             
         ui.button("Save Changes", on_click=save_data)

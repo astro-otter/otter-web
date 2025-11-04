@@ -64,18 +64,7 @@ def _post_table(events:List[dict]) -> None:
             ":format":"value => (value != '0001-01-01T00:00:00') ? new Date(value).toLocaleString('default', {year: 'numeric', month: 'long', day: 'numeric'}) : 'No Date'"},
     ]
 
-    table = (
-        ui.table(
-            columns=columns, rows=[],
-            row_key="id",
-            pagination={
-                'rowsPerPage': 10,
-                'sortBy': 'date',
-                'descending': True
-            }
-        ).props("flat").classes("w-full")
-    )
-
+    rows = []
     for i, event_json in enumerate(events):
         event = TransientRead(**event_json)
         try:
@@ -95,7 +84,7 @@ def _post_table(events:List[dict]) -> None:
         except Exception:
             default_class = None
         
-        table.add_rows(
+        rows.append(
             {
                 "id": f"{i}",
                 "name": event.name.default_name,
@@ -109,6 +98,18 @@ def _post_table(events:List[dict]) -> None:
                 ),
             }
         )
+    
+    table = (
+        ui.table(
+            columns=columns, rows=rows,
+            row_key="id",
+            pagination={
+                'rowsPerPage': 10,
+                'sortBy': 'date',
+                'descending': True
+            }
+        ).props("flat").classes("w-full")
+    )
 
     table.add_slot(
         'body-cell-title',
