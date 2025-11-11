@@ -269,7 +269,6 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
         )
         local_db.upload_private(collection="vetting", testing=False)
     except Exception as e:
-        import pdb; pdb.set_trace()
         log.exception(f"""
         Upload failed with exception {e}! Please try again or contact an OTTER admin!
         """)
