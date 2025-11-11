@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import signal
 from nicegui import ui, context
 import numpy as np
 import pandas as pd
@@ -8,12 +9,11 @@ import time
 
 from astropy.time import Time
 
-from dustmaps.config import config
-from dustmaps.sfd import SFDQuery
-config["data_dir"] = os.path.abspath(__file__)
+from dustmaps.sfd import SFDWebQuery
 
 from ..theme import frame
 from ..config import API_URL, WEB_BASE_URL
+from ..util import _TimeoutError, _timeout_handler
 
 from otter import Otter
 from otter.exceptions import FailedQueryError
@@ -289,7 +289,7 @@ def plot_sed(phot, fig, plot, meta):
         
 def generate_property_table(meta):
 
-    sfd = SFDQuery() # for getting the ebv
+    sfd = SFDWebQuery() # for getting the ebv
     
     # get all of the references for the metadata table
     name_refs = []
@@ -360,6 +360,15 @@ def generate_property_table(meta):
                     disc_date_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
         disc_date_ref_strs_uq = np.unique(disc_date_refs)
 
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(5)
+    try:
+        ebv = sfd(meta.get_skycoord())
+    except _TimeoutError:
+        ebv = "SFD query timeout, this is likely an issue with the dustmaps package, not OTTER!"
+    finally:
+        signal.alarm(0)
+    
     columns = [
         {
             "name": "prop",
@@ -411,7 +420,7 @@ def generate_property_table(meta):
         # give E(B-V)
         {
             'prop': 'MW E(B-V)',
-            'val': sfd(meta.get_skycoord()),
+            'val': ebv,
             'ref': f'<u><a href="https://ui.adsabs.harvard.edu/abs/1998ApJ...500..525S/abstract">SFD</a></u>'
         }
     ]
