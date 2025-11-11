@@ -163,7 +163,7 @@ class UploadInput:
                 raise InvalidInputError("The email address provided is not valid!", type="negative")
 
 def validate_and_save_phot(e, save_values):
-    text = e.content.read().decode('utf-8')
+    text = e.file._data.decode('utf-8')
 
     try:
         df = pd.read_csv(io.StringIO(text), sep=',')
@@ -212,8 +212,7 @@ def validate_and_save_phot(e, save_values):
     save_values("phot_df", df)
 
 def validate_and_save_meta(e, save_values):
-
-    text = e.content.read().decode('utf-8')
+    text = e.file._data.decode('utf-8')
 
     try:
         df = pd.read_csv(io.StringIO(text), sep=',')
@@ -270,6 +269,7 @@ async def send_to_vetting(upload_input: UploadInput, input_type:str, outpath:str
         )
         local_db.upload_private(collection="vetting", testing=False)
     except Exception as e:
+        import pdb; pdb.set_trace()
         log.exception(f"""
         Upload failed with exception {e}! Please try again or contact an OTTER admin!
         """)
