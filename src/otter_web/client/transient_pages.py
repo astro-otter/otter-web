@@ -286,7 +286,15 @@ def plot_sed(phot, fig, plot, meta):
     )
 
     plot.update()
-        
+
+def _parse_references(n0):
+    n = []
+    if not isinstance(n0, list):
+        n0 = [n0]
+    for v in n0:
+        n += v.split(",")
+    return [v.strip() for v in n]
+    
 def generate_property_table(meta):
 
     sfd = SFDWebQuery() # for getting the ebv
@@ -294,9 +302,7 @@ def generate_property_table(meta):
     # get all of the references for the metadata table
     name_refs = []
     for r in meta["name"]["alias"]:
-        n = r["reference"]
-        if not isinstance(n, list):
-            n = [n]
+        n = _parse_references(r["reference"])
         for val in n:
             if val in ALLOWED_NON_BIBS:
                 name_refs.append(val)
@@ -306,9 +312,7 @@ def generate_property_table(meta):
 
     coord_refs = []
     for r in meta["coordinate"]:
-        n = r["reference"]
-        if not isinstance(n, list):
-            n = [n]
+        n = _parse_references(r["reference"])
         for val in n:
             if val in ALLOWED_NON_BIBS:
                 coord_refs.append(val)
@@ -320,9 +324,7 @@ def generate_property_table(meta):
     if "classification" in meta:
         class_refs = []
         for r in meta["classification"]["value"]:
-            n = r["reference"]
-            if not isinstance(n, list):
-                n = [n]
+            n = _parse_references(r["reference"])
             for val in n:
                 if val in ALLOWED_NON_BIBS:
                     class_refs.append(val)
@@ -335,9 +337,7 @@ def generate_property_table(meta):
         redshift_refs = []
         for r in meta["distance"]:
             if r["distance_type"] != "redshift": continue
-            n = r["reference"]
-            if not isinstance(n, list):
-                n = [n]
+            n = _parse_references(r["reference"])
             for val in n:
                 if val in ALLOWED_NON_BIBS:
                     redshift_refs.append(val)
@@ -350,9 +350,7 @@ def generate_property_table(meta):
         disc_date_refs = []
         for r in meta["date_reference"]:
             if r["date_type"] != "discovery": continue
-            n = r["reference"]
-            if not isinstance(n, list):
-                n = [n]
+            n = _parse_references(r["reference"])
             for val in n:
                 if val in ALLOWED_NON_BIBS:
                     disc_date_refs.append(val)
