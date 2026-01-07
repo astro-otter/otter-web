@@ -6,6 +6,7 @@ from nicegui import ui, context
 import numpy as np
 import pandas as pd
 import time
+from requests.exceptions import HTTPError
 
 from astropy.time import Time
 
@@ -364,6 +365,8 @@ def generate_property_table(meta):
         ebv = sfd(meta.get_skycoord())
     except _TimeoutError:
         ebv = "SFD query timeout, this is likely an issue with the dustmaps package, not OTTER!"
+    except HTTPError:
+        ebv = "SFD web query failed due to an argonaut/skymaps server issue!"
     finally:
         signal.alarm(0)
     
