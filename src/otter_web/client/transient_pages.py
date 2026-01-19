@@ -106,7 +106,15 @@ def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
                 symbol=grp.marker,
                 size=10
             ),
-            mode = 'markers'
+            mode = 'markers',
+            customdata = grp[["telescope", "filter_name", "human_readable_refs"]].values,
+            hovertemplate = """
+            <b>Date: %{x}<br>
+            Flux: %{y}</b><br>
+            Telescope: %{customdata[0]}<br>
+            Filter: %{customdata[1]}<br>
+            Source: %{customdata[2]}<br>
+            """
         )
 
     if obs_label == 'Radio':
