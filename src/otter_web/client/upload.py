@@ -137,7 +137,7 @@ class UploadInput:
             
         if self.discovery_date is not None:
             try:
-                Time(self.discovery_date, format=self.discovery_date_form)
+                Time(self.discovery_date, format=self.discovery_date_format)
             except Exception as e:
                 raise InvalidInputError("The discovery date and discovery date format do not match astropy checking!") from e
                 
