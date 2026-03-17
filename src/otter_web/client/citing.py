@@ -1,29 +1,48 @@
 import os
 import numpy as np
 import ads
+import logging
 
 from nicegui import ui, app
 from ..theme import frame
 from ..config import API_URL, WEB_BASE_URL
+from .search_util import SearchInput
 
 from otter import Otter, Transient
 
+logger = logging.getLogger(__name__)
 db = Otter(url=API_URL)
 
 OTTER_BIBTEX = """
-@ARTICLE{2025arXiv250905405F,
-       author = {{Franz}, Noah and {Alexander}, Kate D and {Gomez}, Sebastian and {Christy}, Collin T and {Laskar}, Tanmoy and {van Velzen}, Sjoert and {Earl}, Nicholas and {Gezari}, Suvi and {Karmen}, Mitchell and {Margutti}, Raffaella and {Pearson}, Jeniveve and {Villar}, V. Ashley and {Zabludoff}, Ann I},
+@ARTICLE{2026ApJ...999..243F,
+       author = {{Franz}, Noah and {Alexander}, Kate D. and {Gomez}, Sebastian and {Christy}, Collin T. and {Laskar}, Tanmoy and {van Velzen}, Sjoert and {Earl}, Nicholas and {Gezari}, Suvi and {Karmen}, Mitchell and {Margutti}, Raffaella and {Pearson}, Jeniveve and {Villar}, V. Ashley and {Zabludoff}, Ann I.},
         title = "{The Open mulTiwavelength Transient Event Repository (OTTER): Infrastructure Release and Tidal Disruption Event Catalog}",
-      journal = {arXiv e-prints},
-     keywords = {High Energy Astrophysical Phenomena, Instrumentation and Methods for Astrophysics},
-         year = 2025,
-        month = sep,
-          eid = {arXiv:2509.05405},
-        pages = {arXiv:2509.05405},
-archivePrefix = {arXiv},
-       eprint = {2509.05405},
- primaryClass = {astro-ph.HE},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250905405F},
+      journal = {\apj},
+     keywords = {Catalogs, Astronomy databases, Astronomy software, Transient sources, Tidal disruption, 205, 83, 1855, 1851, 1696},
+         year = 2026,
+        month = mar,
+       volume = {999},
+       number = {2},
+          eid = {243},
+        pages = {243},
+          doi = {10.3847/1538-4357/ae346e},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026ApJ...999..243F},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+
+@ARTICLE{2026JOSS...11.9516F,
+       author = {{Franz}, Noah and {Alexander}, Kate and {Gomez}, Sebastian},
+        title = "{A Python API for OTTER}",
+      journal = {The Journal of Open Source Software},
+     keywords = {Emacs Lisp, Lua, Python},
+         year = 2026,
+        month = feb,
+       volume = {11},
+       number = {118},
+          eid = {9516},
+        pages = {9516},
+          doi = {10.21105/joss.09516},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026JOSS...11.9516F},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
 """
@@ -32,6 +51,8 @@ archivePrefix = {arXiv},
 async def citing_us_page():
 
     app.storage.user.update(CHECKBOXES={})
+
+    search_input = SearchInput()
     
     with frame():
         imsize=32
@@ -55,7 +76,7 @@ citation policy:
   you use the radio data on the TDE SwJ1644+57, you should cite the original series of
   papers on the radio evolution of SwJ1644+57: Berger et al. (2012), Zauderer et al.
   (2013), Zauderer et al. (2011), Eftekhari et al. (2018), Cendes, Y. et al. (2021).
-* Please also include a citation to the OTTER catalog (see below).
+* Please also include a citation to the OTTER catalog and API (see below).
 
 If you use the OTTER infrastructure in your research in any way, please follow the
 citation policy described above. We have attempted to make this as painless as possible
@@ -73,24 +94,20 @@ _Disclaimer:_ We have done our best include every possible citation. But, as you
             "Retrieve Citations"
         ).classes("text-h4")
         ui.markdown(
-            """The below form allows you to select all of the objects you wish to cite.
+            """The below form allows you to download the references associated with a given transient.
             After you press submit, it will download a bibtex file with all of the
             appropriate citations"""
         ).style("font-size:150%;")
-
-        ui.input(
-            label="Object Name",
-            on_change=lambda e : display_object_list.refresh(
-                db.get_meta(
-                    names=e.value
-                )
-            )
+        names = ui.input(
+            'Transient Name',
+            placeholder='Enter a transient name or partial name',
+            on_change = search_input.add_name
         )
-        display_object_list(db.get_meta())
+    
         ui.button(
             "Download Citations",
             on_click = lambda : ui.download(
-                generate_bibtex_file(),
+                generate_bibtex_file(names=search_input.search_kwargs["names"]),
                 "otter-citations.bib"
             )
         )
@@ -99,25 +116,6 @@ _Disclaimer:_ We have done our best include every possible citation. But, as you
             "Citation for the OTTER Catalog Paper"
         ).classes("text-h4")
         ui.code(OTTER_BIBTEX).classes("full-width")
-
-@ui.refreshable    
-def display_object_list(object_list:list[Transient]):
-    """Displays a scrollable area of the object default names in object_list"""
-    CHECKBOXES = app.storage.user["CHECKBOXES"]
-
-    with ui.scroll_area():
-        with ui.grid(columns=4):
-            for t in object_list:
-                checkbox = ui.checkbox(
-                    CHECKBOXES[t.default_name].text  if t.default_name in CHECKBOXES else t.default_name,
-                    on_change = lambda e : _toggle_checkbox(e),
-                    value = CHECKBOXES[t.default_name].value if t.default_name in CHECKBOXES else False
-                )
-                            
-def _toggle_checkbox(e):
-    _CHECKBOXES = app.storage.user["CHECKBOXES"]
-    _CHECKBOXES[e.sender.text] = e.sender
-    app.storage.user.update(_CHECKBOXES)
 
 def _get_all_refs(t):
     res = []
@@ -139,11 +137,16 @@ def _get_all_refs(t):
     tocite = ' '.join([f"{{\citet{{{r.strip()}}}}}" for r in uq_refs])
     return tocite, [r.strip() for r in uq_refs]
     
-def generate_bibtex_file():
-    CHECKBOXES = app.storage.user["CHECKBOXES"]
+def generate_bibtex_file(names):
 
-    bibstr_list = []
-    names = [checkbox.text for checkbox in CHECKBOXES.values()]
+    ui.notification(
+        "Generating the bibtex...",
+        type="ongoing",
+        timeout=None,
+        spinner = True,
+        close_button=True
+    )
+
     transients = db.query(names=names)
 
     all_bibcodes = []    
@@ -152,6 +155,7 @@ def generate_bibtex_file():
         all_bibcodes += bibcodes
 
     all_bibcodes = np.unique(all_bibcodes)
+    logger.info(all_bibcodes)
     try:
         bibtex = ads.ExportQuery(bibcodes=list(all_bibcodes)).execute()
     except ads.exceptions.APIResponseError as exc:

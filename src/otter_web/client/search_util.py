@@ -1,0 +1,511 @@
+import os
+import io
+import zipfile
+import json
+import logging
+from typing import List
+
+from nicegui import ui, events
+from ..theme import frame
+from ..config import API_URL, WEB_BASE_URL
+from ..models import TransientRead
+
+from functools import partialmethod, partial
+from dataclasses import dataclass
+
+from astropy.coordinates import SkyCoord
+
+from otter import Otter, Transient, util
+
+logger = logging.getLogger(__name__)
+db = Otter(url=API_URL)
+
+class SearchInput:
+
+    def __init__(self):
+        self.search_kwargs = {}
+
+    def update(self, e, key):
+
+        if hasattr(e.value, '__len__') and len(e.value) == 0:
+            return # we don't want to set anything
+
+        if key == "mindec" and e.value is None:
+            e.value = -90
+
+        if key == "maxdec" and e.value is None:
+            e.value = 90
+            
+        self.search_kwargs[key] = e.value
+
+    add_name = partialmethod(update, key='names')
+    add_mindec = partialmethod(update, key="mindec")
+    add_maxdec = partialmethod(update, key="maxdec")
+    add_minz = partialmethod(update, key='minz')
+    add_maxz = partialmethod(update, key='maxz')
+    add_ra = partialmethod(update, key='ra')
+    add_dec = partialmethod(update, key='dec')
+    add_radius = partialmethod(update, key='radius')
+    add_hasphot = partialmethod(update, key='hasphot')
+    add_hasdet = partialmethod(update, key='has_det')
+    add_hasradiophot = partialmethod(update, key="has_radio_phot")
+    add_hasuvoirphot = partialmethod(update, key="has_uvoir_phot")
+    add_hasxrayphot = partialmethod(update, key="has_xray_phot")
+    add_spec_classed = partialmethod(update, key='spec_classed')
+    add_unambiguous = partialmethod(update, key='unambiguous')
+    add_ra_unit = partialmethod(update, key='ra_unit')
+    add_classification = partialmethod(update, key='classification')
+    add_wave_det = partialmethod(update, key="wave_det")
+    
+@dataclass
+class SearchResults:
+    results: list[dict]
+
+    @ui.refreshable
+    def write_results_to_zip(self):
+        """
+        Writes the search results to a zipfile in memory to stage for download
+
+        Modified from https://stackoverflow.com/questions/2463770/python-in-memory-zip-library
+        """
+        if self.results is None:
+            ui.notify("You must do a search to download search results!")
+            return
+
+        zip_buffer = io.BytesIO()
+
+        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+            for data in self.results:
+                file_name = f"{data.default_name}.json"
+                file_str = io.BytesIO(
+                    bytes(
+                        json.dumps(dict(data), indent=4),
+                        encoding="utf-8"
+                    )
+                )
+                zip_file.writestr(file_name, file_str.getvalue())
+
+
+        ui.download(
+            zip_buffer.getvalue(),
+            "search-results.zip"
+        )
+
+def _post_table(events:List[dict]) -> None:
+    columns = [
+        {
+            "name": "id",
+            "label": "ID",
+            "field": "id",
+            "required": True,
+            "sortable": True,
+            "align": "left",
+            "classes": "hidden",
+            "headerClasses": "hidden",
+        },
+        {
+            "name": "name",
+            "label": "Name",
+            "field": "name",
+            "required": True,
+            "sortable": True,
+            "align": "left",
+        },
+        {
+            "name": "class",
+            "label": "Classification",
+            "field": "class",
+            "required": True,
+            "sortable": True,
+            "align": "left"
+        },
+        {"name": "ra", "label": "RA", "field": "ra", "sortable": False},
+        {"name": "dec", "label": "Dec", "field": "dec", "sortable": False},
+        {
+            "name": "date",
+            "label": "Discovery Date",
+            "field": "date",
+            "sortable": True, 
+            ":format":"value => (value != '0001-01-01T00:00:00') ? new Date(value).toLocaleString('default', {year: 'numeric', month: 'long', day: 'numeric'}) : 'No Date'"},
+    ]
+
+    rows = []
+    for i, event_json in enumerate(events):
+        event = TransientRead(**event_json)
+        try:
+            disc_date = Transient(event_json).get_discovery_date()
+        except (KeyError, TypeError):
+            disc_date = None
+            
+        coord_string = SkyCoord(
+            event.coordinate[0].ra, event.coordinate[0].dec, unit=(
+                event.coordinate[0].ra_units,
+                event.coordinate[0].dec_units
+            )
+        ).to_string("hmsdms", sep=":", precision=2)
+
+        try:
+            default_class = Transient(event_json).get_classification()[0]
+        except Exception:
+            default_class = None
+        
+        rows.append(
+            {
+                "id": f"{i}",
+                "name": event.name.default_name,
+                "class": default_class if default_class is not None else "Unknown Class",
+                "ra": coord_string.split(" ")[0],
+                "dec": coord_string.split(" ")[1],
+                "date": (
+                    disc_date.datetime
+                    if disc_date is not None
+                    else datetime.datetime(1,1,1)
+                ),
+            }
+        )
+    
+    table = (
+        ui.table(
+            columns=columns, rows=rows,
+            row_key="id",
+            pagination={
+                'rowsPerPage': 10,
+                'sortBy': 'date',
+                'descending': True
+            }
+        ).props("flat").classes("w-full")
+    )
+
+    table.add_slot(
+        'body-cell-title',
+        r'<td><a :href="props.row.url">{{ props.row.title }}</a></td>'
+    )
+    table.on(
+        'rowClick',
+        _row_click_navigate 
+    )
+
+async def _row_click_navigate(e, open_new_tab=True):
+    if not open_new_tab:
+        ui.notification(
+            "Loading the page...",
+            type="ongoing",
+            timeout=None,
+            spinner = True,
+            close_button=True
+        )
+        
+    ui.navigate.to(
+        os.path.join(
+            WEB_BASE_URL,
+            'transient',
+            f'{e.args[1]["name"]}'
+        ),
+        new_tab = open_new_tab
+    )
+
+        
+def do_search(search_input, search_results, post_table):
+    ui.notify('Search Initiated...')
+
+    # do some validation
+    if (
+            'ra' in search_input.search_kwargs or
+            'dec' in search_input.search_kwargs
+    ):
+        # then we need all four of those
+        try:
+            assert 'ra' in search_input.search_kwargs
+            assert 'dec' in search_input.search_kwargs
+            assert 'ra_unit' in search_input.search_kwargs
+
+        except AssertionError:
+            ui.notify(
+                'If RA or Dec is provided then the RA, Dec, RA Unit, and Dec Unit must all be provided!'
+            )
+        
+            
+    # now do some cleaning
+    if 'ra' in search_input.search_kwargs:
+        search_input.search_kwargs['coords'] = SkyCoord(
+            search_input.search_kwargs['ra'],
+            search_input.search_kwargs['dec'],
+            unit = (
+                search_input.search_kwargs['ra_unit'],
+                'deg' # assume always in degrees
+            )
+        )
+
+    logger.debug(search_input.search_kwargs)
+    res = db.get_meta(**search_input.search_kwargs)
+    search_results.results = res
+    # logger.info(res)
+    post_table.refresh(res)
+    ui.notify("Search Completed!")
+
+def submit_form_with_enter(
+        event:events.KeyEventArguments,
+        search_input,
+        search_results,
+        post_table
+) -> None:
+    if event.key.enter and event.action.keydown:
+        do_search(
+            search_input,
+            search_results,
+            post_table
+        )
+    
+def search_form(search_results, post_table):
+
+    search_input = SearchInput()
+
+    classes = {
+        c:c for c in util._KNOWN_CLASS_ROOTS
+    }
+    classes[None] = "Select a classification..."
+
+    wave_dets_labels = {
+        "radio": "Radio",
+        "uvoir": "UV/Optical/IR",
+        "xray": "X-ray",
+        None:"Select a wavelength regime..."
+    }
+    
+    with ui.column():
+        with ui.row():
+            names = ui.input(
+                'Transient Name',
+                placeholder='Enter a transient name or partial name',
+                on_change = search_input.add_name
+            )
+
+            searchclass = ui.select(
+                classes,
+                label = 'Select a classification...',
+                value = None,
+                on_change = search_input.add_classification,
+                clearable = True
+            )
+            
+        with ui.row():
+            ra = ui.input(
+                'RA',
+                placeholder='Enter an RA',
+                on_change = search_input.add_ra
+            )
+
+            dec = ui.input(
+                'Declination (deg.)',
+                placeholder='Enter a Dec. (deg.)',
+                on_change = search_input.add_dec
+            )
+
+            
+            radius = ui.number(
+                'Search Radius (")',
+                placeholder='Default is 5"',
+                on_change = search_input.add_radius
+            )
+
+            unit_options = ['hourangle', 'degree']
+            ra_unit = ui.select(
+                unit_options,
+                label = 'RA Unit',
+                value = unit_options[0],
+                on_change = search_input.add_ra_unit
+            )
+            search_input.add_ra_unit(ra_unit)
+
+        with ui.row():
+            maxz = ui.number(
+                'Maximum Redshift',
+                placeholder='Enter a maximum redshift',
+                on_change = search_input.add_maxz
+            )
+                
+            minz = ui.number(
+                'Minimum Redshift',
+                placeholder='Enter a minimum redshift',
+                on_change = search_input.add_minz
+            )
+
+        with ui.row():
+            mindec = ui.number(
+                "Minimum Declination (degrees)",
+                placeholder="Enter a minimum declination",
+                on_change = search_input.add_mindec
+            )
+
+            maxdec = ui.number(
+                "Maximum Declination (degrees)",
+                placeholder="Enter a maximum declination",
+                on_change = search_input.add_maxdec
+            )
+
+        with ui.row():
+            hasphot = ui.checkbox(
+                "Has Photometry?",
+                on_change = search_input.add_hasphot
+            )
+            
+            hasspecclass = ui.checkbox(
+                "Spectroscopically Confirmed?",
+                on_change = search_input.add_spec_classed
+            )
+            
+            unambiguous = ui.checkbox(
+                "Unambiguously Classified?",
+                on_change = search_input.add_unambiguous
+            )
+
+        with ui.row():
+            hasradiophot = ui.checkbox(
+                "Has Radio Photometry?",
+                on_change = search_input.add_hasradiophot
+            )
+
+            hasuvoirphot = ui.checkbox(
+                "Has UV/Optical/IR Photometry?",
+                on_change = search_input.add_hasuvoirphot
+            )
+
+            hasxrayphot = ui.checkbox(
+                "Has X-ray Photometry?",
+                on_change = search_input.add_hasxrayphot
+            )
+
+        with ui.row():
+            hasdet = ui.checkbox(
+                "Is Detected?",
+                on_change = search_input.add_hasdet
+            )
+            wavedet = ui.select(
+                wave_dets_labels,
+                label = 'Select the wavelength regime you want to check for detections in...',
+                value = None,
+                on_change = search_input.add_wave_det,
+                clearable = True
+
+            )
+        
+    ui.button('Submit').props('type="submit"').on_click(
+        lambda: do_search(
+            search_input,
+            search_results,
+            post_table
+        )
+    )
+
+    ui.keyboard(
+        on_key=lambda e: submit_form_with_enter(
+            e,
+            search_input,
+            search_results,
+            post_table
+        ),
+        ignore = ["select", "button", "textarea"]
+    )
+
+def raw_aql_query(post_table):
+    query = """FOR transient IN transients
+    RETURN transient
+        """
+        
+    editor = ui.codemirror(
+        value=f"{query}",
+        language="AQL",
+        on_change=lambda e : post_table.refresh(
+            [r for r in db.AQLQuery(e.value, rawResults=True)]
+        )
+    ).classes("w-full")
+    
+# Function to switch between forms
+def show_form(selected_form, search_results, post_table, containers=None):
+    if containers is not None:
+        for val in list(containers)[1:]:
+            val.delete()
+    if selected_form == 'Search Form':
+        search_form(search_results, post_table)
+    elif selected_form == 'AQL Query':
+        raw_aql_query(post_table)
+        
+
+def simple_form(search_results, post_table):
+
+    search_input = SearchInput()
+
+    classes = {
+        c:c for c in util._KNOWN_CLASS_ROOTS
+    }
+    classes[None] = "Select a classification..."
+
+    wave_dets_labels = {
+        "radio": "Radio",
+        "uvoir": "UV/Optical/IR",
+        "xray": "X-ray",
+        None:"Select a wavelength regime..."
+    }
+    
+    with ui.column():
+        with ui.row():
+            names = ui.input(
+                'Transient Name',
+                placeholder='Enter a transient name or partial name',
+                on_change = search_input.add_name
+            )
+
+            searchclass = ui.select(
+                classes,
+                label = 'Select a classification...',
+                value = None,
+                on_change = search_input.add_classification,
+                clearable = True
+            )
+            
+        with ui.row():
+            ra = ui.input(
+                'RA',
+                placeholder='Enter an RA',
+                on_change = search_input.add_ra
+            )
+
+            dec = ui.input(
+                'Declination (deg.)',
+                placeholder='Enter a Dec. (deg.)',
+                on_change = search_input.add_dec
+            )
+
+            
+            radius = ui.number(
+                'Search Radius (")',
+                placeholder='Default is 5"',
+                on_change = search_input.add_radius
+            )
+
+            unit_options = ['hourangle', 'degree']
+            ra_unit = ui.select(
+                unit_options,
+                label = 'RA Unit',
+                value = unit_options[0],
+                on_change = search_input.add_ra_unit
+            )
+            search_input.add_ra_unit(ra_unit)
+            
+        ui.button('Submit').props('type="submit"').on_click(
+            lambda: do_search(
+                search_input,
+                search_results,
+                post_table
+            )
+        )
+
+        ui.keyboard(
+            on_key=lambda e: submit_form_with_enter(
+                e,
+                search_input,
+                search_results,
+                post_table
+            ),
+            ignore = ["select", "button", "textarea"]
+        )
