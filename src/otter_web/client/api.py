@@ -219,3 +219,34 @@ async def get_jwt_token(request:Request):
     print(proxy_url)
     arango_resp = await arangodb_proxy_post(request, proxy_url)
     return arango_resp
+
+@API_ROUTER.put(os.path.join(WEB_BASE_URL, "api/_db/{db}/_api/cursor/{cursor_id}"))
+async def api_cursor_next_batch(db: str, cursor_id: str, request: Request):
+    """Fetch the next batch from an existing cursor (used by pyArango pagination)."""
+    proxy_url = f"{API_URL}/_db/{db}/_api/cursor/{cursor_id}"
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in HOP_BY_HOP_HEADERS
+    }
+
+    # Read body if present, but don't require it — pyArango sends no body for cursor advancement
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+
+    try:
+        response = await run.io_bound(
+            requests.put,
+            proxy_url,
+            headers=headers,
+            **({"json": body} if body is not None else {})
+        )
+        response.raise_for_status()
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": True, "code": 500, "errorMessage": f"Failed to advance cursor: {e}"}
+        )
+    return JSONResponse(status_code=response.status_code, content=response.json())
