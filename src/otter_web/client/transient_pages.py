@@ -573,7 +573,7 @@ async def _load_phot(transient, obs_types, label_map):
     return allphot, phot_types
 
 async def _add_aladin_viewer(dataset, aladin_container, fov_deg):
-    await asyncio.sleep(2.0)  # Give Plotly time to render first
+    await asyncio.sleep(5.0)  # Give Plotly time to render first
 
     with aladin_container:
         aladin_html = f"""
