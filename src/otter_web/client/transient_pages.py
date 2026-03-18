@@ -2,7 +2,8 @@ import os
 import io
 import json
 import signal
-from nicegui import ui, context
+import asyncio
+from nicegui import ui, context, background_tasks
 import numpy as np
 import pandas as pd
 import time
@@ -45,6 +46,16 @@ XAXIS = "Observed Frequency [GHz]"
 import logging
 logger = logging.getLogger("otter-log")
 
+from contextlib import contextmanager
+@contextmanager
+def suppress_logger(logger, level=logging.ERROR):
+    original_level = logger.level
+    logger.setLevel(level)
+    try:
+        yield
+    finally:
+        logger.setLevel(original_level)
+
 def _derive_marker(row):
 
     if row.upperlimit:
@@ -62,150 +73,164 @@ def _derive_marker(row):
 
     return base_marker
         
-def plot_lightcurve(phot, obs_label, fig, plot, meta, show_limits=True):
+def plot_lightcurve(phot, obs_label, plot, meta, show_limits=True):
+
+    logger.info(f"plot_sed called: phot type={type(phot)}, phot len={len(phot) if phot is not None else 'None'}")
 
     if len(phot) == 0:
-        for trace in fig.data:
+        for trace in plot.figure.data:
             trace.visible = 'legendonly'
         plot.update()
         return
 
-    fig.data = [] # clear the data from the figure
-    
-    cmap = mpl.colormaps['jet']
-    n_lines = len(phot.filter_name.unique())
-    colors = cmap(np.linspace(0, 1, n_lines))
+    try:
+        plot.figure.data = []
+        plot.update()
+        fig = plot.figure
 
-    for (band, grp_all), c in zip(phot.groupby('filter_name'), colors):
-        
-        # make an approximate cut on "SNR" (really just flux/flux_err)
-        
-        if obs_label == 'UV/Optical/IR': 
-            grp = grp_all[grp_all.converted_flux/grp_all.converted_flux_err > SNR_THRESHOLD]
+        cmap = mpl.colormaps['jet']
+        n_lines = len(phot.filter_name.unique())
+        colors = cmap(np.linspace(0, 1, n_lines))
+
+        for (band, grp_all), c in zip(phot.groupby('filter_name'), colors):
+
+            # make an approximate cut on "SNR" (really just flux/flux_err)
+
+            if obs_label == 'UV/Optical/IR': 
+                grp = grp_all[grp_all.converted_flux/grp_all.converted_flux_err > SNR_THRESHOLD]
+            else:
+                grp = grp_all
+
+            #logger.info(f"{band}: {len(grp)} points")
+
+            # filter out upperlimits if show_limits is false
+            if not show_limits:
+                grp = grp[~grp.upperlimit]
+
+            markers = grp.apply(_derive_marker, axis=1)
+
+            flux_err = grp.apply(
+                lambda row : None if row.upperlimit else row.converted_flux_err,
+                axis = 1
+            )
+
+            fig.add_scatter(
+                x = grp.converted_date,
+                y = grp.converted_flux.astype(float),
+                #error_y = dict(array=flux_err.astype(float)),
+                name = band,
+                marker = dict(
+                    color=mpl.colors.to_hex(c),
+                    symbol=markers.tolist(),
+                    size=10
+                ),
+                mode = 'markers',
+                customdata = grp[["telescope", "filter_name", "human_readable_refs"]].values,
+                hovertemplate = """
+                <b>Date: %{x}<br>
+                Flux: %{y}</b><br>
+                Telescope: %{customdata[0]}<br>
+                Filter: %{customdata[1]}<br>
+                Source: %{customdata[2]}<br>
+                """
+            )
+
+        if obs_label == 'Radio':
+            ylabel = 'Flux Density [mJy]'
+            yaxis_type = "log"
+        elif obs_label == 'UV/Optical/IR':
+            ylabel = 'AB Magnitude'
+            yaxis_type = "linear"
+        elif obs_label == 'X-Ray':
+            ylabel = 'Flux Density [uJy]'
+            yaxis_type = "log"
         else:
-            grp = grp_all
+            raise ValueError('Invalid plot label!')
 
-        # filter out upperlimits if show_limits is false
-        if not show_limits:
-            grp = grp[~grp.upperlimit]
+        # set some date and flux limits to make the plots look a little prettier
+        disc_date = meta.get_discovery_date()
 
-        grp["marker"] = grp.apply(_derive_marker, axis=1)
-        
-        grp["converted_flux_err"] = grp.apply(
-            lambda row : None if row.upperlimit else row.converted_flux_err,
-            axis = 1
-        )
-        
-        fig.add_scatter(
-            x = grp.converted_date,
-            y = grp.converted_flux.astype(float),
-            error_y = dict(array=grp.converted_flux_err.astype(float)),
-            name = band,
-            marker = dict(
-                color=mpl.colors.to_hex(c),
-                symbol=grp.marker,
-                size=10
-            ),
-            mode = 'markers',
-            customdata = grp[["telescope", "filter_name", "human_readable_refs"]].values,
-            hovertemplate = """
-            <b>Date: %{x}<br>
-            Flux: %{y}</b><br>
-            Telescope: %{customdata[0]}<br>
-            Filter: %{customdata[1]}<br>
-            Source: %{customdata[2]}<br>
-            """
-        )
-
-    if obs_label == 'Radio':
-        ylabel = 'Flux Density [mJy]'
-        yaxis_type = "log"
-    elif obs_label == 'UV/Optical/IR':
-        ylabel = 'AB Magnitude'
-        yaxis_type = "linear"
-    elif obs_label == 'X-Ray':
-        ylabel = 'Flux Density [uJy]'
-        yaxis_type = "log"
-    else:
-        raise ValueError('Invalid plot label!')
-
-    # set some date and flux limits to make the plots look a little prettier
-    disc_date = meta.get_discovery_date()
-    
-    if disc_date is None:
-        if np.all(phot.upperlimit):
-            disc_date = Time(
-                phot.converted_date.min(),
-                format="iso"
-            ).mjd - 10
+        if disc_date is None:
+            if np.all(phot.upperlimit):
+                disc_date = Time(
+                    phot.converted_date.min(),
+                    format="iso"
+                ).mjd - 10
+            else:
+                # then just use the first detection
+                disc_date = Time(
+                    phot[~phot.upperlimit].converted_date.min(),
+                    format="iso"
+                ).mjd - 10
         else:
-            # then just use the first detection
-            disc_date = Time(
-                phot[~phot.upperlimit].converted_date.min(),
-                format="iso"
-            ).mjd - 10
-    else:
-        disc_date = disc_date.mjd
-    date_range = (
-        max(
-            Time(disc_date - 2*365, format="mjd").iso,
-            Time(
-                min(Time(
-                    phot.converted_date.astype(str).tolist(),
-                    format="iso"
-                )).mjd - 50,
-                format="mjd"
-            ).iso
-        ),
-        min(
-            Time(disc_date + 365*8, format="mjd").iso,
-            Time(
-                max(Time(
-                    phot.converted_date.astype(str).tolist(),
-                    format="iso"
-                )).mjd + 50,
-                format="mjd"
-            ).iso
-        )
-    ) # -2 < t/years < 8
-
-    fluxes = phot[~phot.upperlimit].converted_flux
-    outlier_limit = 5*np.std(fluxes)
-    flux_mean = np.mean(fluxes)
-    if yaxis_type == "log":
-        phot_range = (
-            max(0, flux_mean - outlier_limit),
-            np.log10(flux_mean + outlier_limit)
-        )
-    else:
-        phot_range = (
-            max(-1, flux_mean - outlier_limit),
-            flux_mean + outlier_limit
-        )
-
-    # update the axis with labels and ranges
-    fig.update_layout(
-        dict(
-            xaxis = dict(
-                title='Date',
+            disc_date = disc_date.mjd
+        date_range = (
+            max(
+                Time(disc_date - 2*365, format="mjd").iso,
+                Time(
+                    min(Time(
+                        phot.converted_date.astype(str).tolist(),
+                        format="iso"
+                    )).mjd - 50,
+                    format="mjd"
+                ).iso
             ),
-            yaxis = dict(
-                title=ylabel,
-                type=yaxis_type
+            min(
+                Time(disc_date + 365*8, format="mjd").iso,
+                Time(
+                    max(Time(
+                        phot.converted_date.astype(str).tolist(),
+                        format="iso"
+                    )).mjd + 50,
+                    format="mjd"
+                ).iso
+            )
+        ) # -2 < t/years < 8
+
+        fluxes = phot[~phot.upperlimit].converted_flux
+        outlier_limit = 5*np.std(fluxes)
+        flux_mean = np.mean(fluxes)
+        if yaxis_type == "log":
+            phot_range = (
+                max(0, flux_mean - outlier_limit),
+                np.log10(flux_mean + outlier_limit)
+            )
+        else:
+            phot_range = (
+                max(-1, flux_mean - outlier_limit),
+                flux_mean + outlier_limit
+            )
+
+        # update the axis with labels and ranges
+        fig.update_layout(
+            dict(
+                xaxis = dict(
+                    title='Date',
+                ),
+                yaxis = dict(
+                    title=ylabel,
+                    type=yaxis_type
+                ),
             ),
-        ),
-        autosize=False
-    )
-        
-    if obs_label == 'UV/Optical/IR':
-        fig.update_yaxes(autorange='reversed')
-    if obs_label in {"Radio", "X-Ray"} and fig.layout.yaxis.autorange == 'reversed':
-        fig.update_yaxes(autorange=True)
-        
-    plot.update()
+            autosize=False
+        )
 
-def plot_sed(phot, fig, plot, meta):
+        if obs_label == 'UV/Optical/IR':
+            fig.update_yaxes(autorange='reversed')
+        if obs_label in {"Radio", "X-Ray"} and fig.layout.yaxis.autorange == 'reversed':
+            fig.update_yaxes(autorange=True)
 
+        #plot.update_figure(fig)
+        plot.figure = fig
+        plot.update()
+        logger.info("Successfully updated the light curve plot!")
+    except Exception as e:
+        logger.error(f"Error in plot_lightcurve: {e}", exc_info=True)
+    
+def plot_sed(phot, plot, meta):
+
+    logger.info(f"plot_sed called: phot type={type(phot)}, phot len={len(phot) if phot is not None else 'None'}")
+    
     global DELTA_T
     dt = DELTA_T
 
@@ -217,85 +242,94 @@ def plot_sed(phot, fig, plot, meta):
 
     global XAXIS
     xaxis = XAXIS
-    
-    fig.data = [] # clear the data from the figure
-    
-    disc_date = meta.get_discovery_date()
-    if disc_date is None:
-        disc_date = phot.converted_date.min()
-    else:
-       disc_date = disc_date.mjd     
-    phot["dt"] = phot.converted_date.astype(float) - disc_date
 
-    if end_time is None:
-        end_time = phot.dt.max()
-    
-    max_t = min(phot.dt.max(), end_time)
-    min_t = max(phot.dt.min(), start_time)
-    
-    cmap = mpl.colormaps['jet']
-    n_lines = int(abs(max_t - min_t) // dt)
-    colors = cmap(np.linspace(0, 1, n_lines))
-    
-    color_idx = 0 
-    curr_time = start_time
-
-    if xaxis == "Observed Frequency [GHz]":
-        xaxis_key = "converted_freq"
-    elif xaxis == "Observed Wavelength [nm]":
-        xaxis_key = "converted_wave"
-
-    while curr_time+dt < max_t:
-        c = colors[color_idx]
-
-        grp = phot[(phot.dt >= curr_time) * (phot.dt < curr_time+dt)]
-        if len(grp) == 0:
-            curr_time += dt
-            continue
-
-        grp["marker"] = grp.apply(_derive_marker, axis=1)
-
-        grp["converted_flux_err"] = grp.apply(
-            lambda row : None if row.upperlimit else row.converted_flux_err,
-            axis = 1
-        )
+    try:
+        plot.figure.data = []
+        plot.update()
+        fig = plot.figure
         
-        fig.add_scatter(
-            x = grp[xaxis_key].astype(float),
-            y = grp.converted_flux.astype(float),
-            error_y = dict(array=grp.converted_flux_err.astype(float)),
-            name = f"{curr_time}-{curr_time+dt}",
-            marker = dict(
-                color=mpl.colors.to_hex(c),
-                symbol=grp.marker,
-                size=10
+        disc_date = meta.get_discovery_date()
+        if disc_date is None:
+            disc_date = phot.converted_date.min()
+        else:
+           disc_date = disc_date.mjd     
+        phot["dt"] = phot.converted_date.astype(float) - disc_date
+
+        if end_time is None:
+            end_time = phot.dt.max()
+
+        max_t = min(phot.dt.max(), end_time)
+        min_t = max(phot.dt.min(), start_time)
+
+        cmap = mpl.colormaps['jet']
+        n_lines = int(abs(max_t - min_t) // dt)
+        colors = cmap(np.linspace(0, 1, n_lines))
+
+        color_idx = 0 
+        curr_time = start_time
+
+        if xaxis == "Observed Frequency [GHz]":
+            xaxis_key = "converted_freq"
+        elif xaxis == "Observed Wavelength [nm]":
+            xaxis_key = "converted_wave"
+
+        while curr_time+dt < max_t:
+            c = colors[color_idx]
+
+            grp = phot[(phot.dt >= curr_time) * (phot.dt < curr_time+dt)]
+            if len(grp) == 0:
+                curr_time += dt
+                continue
+
+            markers = grp.apply(_derive_marker, axis=1)
+
+            flux_err = grp.apply(
+                lambda row : None if row.upperlimit else row.converted_flux_err,
+                axis = 1
+            )
+
+            fig.add_scatter(
+                x = grp[xaxis_key].astype(float),
+                y = grp.converted_flux.astype(float),
+                error_y = dict(array=flux_err.astype(float)),
+                name = f"{curr_time}-{curr_time+dt}",
+                marker = dict(
+                    color=mpl.colors.to_hex(c),
+                    symbol=markers,
+                    size=10
+                ),
+                mode = 'markers'
+            )
+
+            curr_time += dt
+            color_idx += 1
+
+        exp_form = "power"
+        fig.update_layout(
+            dict(
+                xaxis = dict(
+                    title=XAXIS,
+                    type = "log",
+                    exponentformat  = exp_form
+                ),
+                yaxis = dict(
+                    title="Flux Density [Jy]",
+                    type="log",
+                    exponentformat = exp_form
+                ),
+                legend_title_text = "Time Since Discovery",
             ),
-            mode = 'markers'
+            autosize=False
         )
 
-        curr_time += dt
-        color_idx += 1
-
-    exp_form = "power"
-    fig.update_layout(
-        dict(
-            xaxis = dict(
-                title=XAXIS,
-                type = "log",
-                exponentformat  = exp_form
-            ),
-            yaxis = dict(
-                title="Flux Density [Jy]",
-                type="log",
-                exponentformat = exp_form
-            ),
-            legend_title_text = "Time Since Discovery",
-        ),
-        autosize=False
-    )
-
-    plot.update()
-
+        #plot.update_figure(fig)
+        plot.figure = fig
+        plot.update()
+        
+        logger.info("Successfully updated the SED plot!")
+    except Exception as e:
+        logger.error(f"Error in plot_sed: {e}", exc_info=True)
+        
 def _parse_references(n0):
     n = []
     if not isinstance(n0, list):
@@ -514,17 +548,14 @@ def _update_global_xaxis(new_xaxis, *args, **kwargs):
     XAXIS = new_xaxis
     plot_sed(*args, **kwargs)
 
-async def _load_phot(db, transient_default_name, obs_types, label_map):
+async def _load_phot(transient, obs_types, label_map):
     phot_types = {}
     for obs_type, u in obs_types.items():
         try:
-            phot = db.get_phot(
-                names = transient_default_name,
+            phot = transient.clean_photometry(
                 flux_unit = u,
                 date_unit = 'iso',
-                return_type = 'pandas',
-                obs_type = obs_type,
-                keep_raw = True
+                obs_type = obs_type
             )
             phot_types[label_map[obs_type]] = phot
             
@@ -532,28 +563,52 @@ async def _load_phot(db, transient_default_name, obs_types, label_map):
             pass
 
     try:
-        allphot = db.get_phot(
-            names = transient_default_name,
+        allphot = transient.clean_photometry(
             flux_unit = "Jy",
             date_unit = "mjd",
-            return_type = "pandas",
-            keep_raw = True
         )
     except FailedQueryError:
         allphot = None
         
     return allphot, phot_types
 
+async def _add_aladin_viewer(dataset, aladin_container, fov_deg):
+    await asyncio.sleep(2.0)  # Give Plotly time to render first
+
+    with aladin_container:
+        aladin_html = f"""
+        <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
+        """
+
+        # First set the HTML content (without script)
+        aladin_container.content = aladin_html
+
+        # Then run the script separately
+        ui.run_javascript(f"""
+        A.init.then( () => {{
+            aladin = A.aladin('#aladin-lite-div', {{
+                survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/', 
+                fov:{fov_deg}, 
+                target: "{dataset.get_skycoord().to_string('hmsdms', sep=':')}"
+            }});
+        }});
+        """)
+
+        logger.info("Aladin viewer added")
+    
 @ui.page(os.path.join(WEB_BASE_URL, 'transient', '{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
+    ui.add_head_html("""
+    <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
+    """)
+    
     global DELTA_T
     global MIN_T
     global MAX_T
 
     logger.info("Connecting to the database and loading metadata...")
     db = Otter(url=API_URL)
-    meta = db.get_meta(names=transient_default_name)[0]
     dataset = db.query(names=transient_default_name)[0]
     json_data = json.dumps(dict(dataset), indent=4)
     
@@ -570,12 +625,12 @@ async def transient_subpage(transient_default_name:str):
 
     start = time.time()
     logger.info("Loading photometry...")
-    allphot, phot_types = await _load_phot(
-        db,
-        transient_default_name,
-        obs_types,
-        label_map
-    )
+    with suppress_logger(logger):
+        allphot, phot_types = await _load_phot(
+            dataset,
+            obs_types,
+            label_map
+        )
     if allphot is not None:
         allphot_str = io.BytesIO()
         allphot.to_csv(allphot_str, index=False, encoding="utf-8")
@@ -616,28 +671,16 @@ async def transient_subpage(transient_default_name:str):
                 ui.element("div")
                     
             with ui.column().classes("align-right col-span-1"):
-                aladin_parent = ui.element("div")
+                aladin_parent = ui.html(sanitize=False)               
+                
+                asyncio.create_task(_add_aladin_viewer(
+                    dataset,
+                    aladin_parent,
+                    fov_deg
+                ))
             
-        # add aladin viewer
-        aladin_viewer = f"""
-        <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
-        <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
-        <script>
-        let aladin;
-        A.init.then( () => {{
-            aladin = A.aladin('#aladin-lite-div', {{survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/', fov:{fov_deg}, target: "{meta.get_skycoord().to_string('hmsdms', sep=':')}"}});
-        }});
-        </script>
-        """
-        ui.add_body_html(aladin_viewer)
-        element = ui.run_javascript(f"""
-        var el = document.getElementById('aladin-lite-div');
-        var parent = document.getElementById('c{aladin_parent.id}');
-        parent.appendChild(el);
-        """)
-        
         ui.label(f'Properties').classes("text-h4")
-        table = generate_property_table(meta)
+        table = generate_property_table(dataset)
         
         if hasphot:
             # ui.label(f'Plots').classes("text-h3")
@@ -671,8 +714,7 @@ async def transient_subpage(transient_default_name:str):
                 with ui.column():
                     ui.label(f'Light Curves').classes("text-h6")
                                     
-                    fig_lc = go.Figure()
-                    plot_lc = ui.plotly(fig_lc)
+                    plot_lc = ui.plotly(go.Figure())
 
                     plot_options = list(phot_types.keys())
 
@@ -683,9 +725,8 @@ async def transient_subpage(transient_default_name:str):
                             on_change=lambda e : plot_lightcurve(
                                 phot_types[e.value],
                                 e.value,
-                                fig_lc,
                                 plot_lc,
-                                meta
+                                dataset
                             )
                         )
 
@@ -698,9 +739,8 @@ async def transient_subpage(transient_default_name:str):
                             on_change = lambda e : plot_lightcurve(
                                 phot_types[plot_toggle.value],
                                 plot_toggle.value,
-                                fig_lc,
                                 plot_lc,
-                                meta,
+                                dataset,
                                 show_limits=bool(e.value)
                             )
                         )
@@ -710,9 +750,8 @@ async def transient_subpage(transient_default_name:str):
                             on_click = lambda : plot_lightcurve(
                                 [], # pass an empty phot dataframe
                                 plot_toggle.value,
-                                fig_lc,
                                 plot_lc,
-                                meta,
+                                dataset,
                                 show_limits=bool(show_limits.value)
                             )
                         )
@@ -722,9 +761,8 @@ async def transient_subpage(transient_default_name:str):
                             on_click = lambda : plot_lightcurve(
                                 phot_types[plot_toggle.value],
                                 plot_toggle.value,
-                                fig_lc,
                                 plot_lc,
-                                meta,
+                                dataset,
                                 show_limits=bool(show_limits.value)
                             )
                         )
@@ -733,18 +771,15 @@ async def transient_subpage(transient_default_name:str):
                     plot_lightcurve(
                         phot_types[plot_options[0]],
                         plot_options[0],
-                        fig_lc,
                         plot_lc,
-                        meta,
+                        dataset,
                         show_limits=bool(show_limits.value)
                     )                            
-
                 # SED
                 with ui.column():
                     ui.label("Spectral Energy Distribution").classes("text-h6")
 
-                    sed_fig = go.Figure()
-                    sed_plot = ui.plotly(sed_fig)
+                    sed_plot = ui.plotly(go.Figure())
                     
                     with ui.row():
                         dt_input = ui.number(
@@ -753,9 +788,8 @@ async def transient_subpage(transient_default_name:str):
                             on_change=lambda e : _update_global_delta_t(
                                 e.value,
                                 allphot,
-                                sed_fig,
                                 sed_plot,
-                                meta
+                                dataset
                             )
                         )
                         with dt_input.add_slot("prepend"):
@@ -768,9 +802,8 @@ async def transient_subpage(transient_default_name:str):
                             on_change=lambda e:_update_global_min_t(
                                 e.value,
                                 allphot,
-                                sed_fig,
                                 sed_plot,
-                                meta
+                                dataset
                             )
                         )
                         with mintime_input.add_slot("prepend"):
@@ -783,9 +816,8 @@ async def transient_subpage(transient_default_name:str):
                             on_change=lambda e:_update_global_max_t(
                                 e.value,
                                 allphot,
-                                sed_fig,
                                 sed_plot,
-                                meta
+                                dataset
                             )
                         )
                         with maxtime_input.add_slot("prepend"):
@@ -799,17 +831,15 @@ async def transient_subpage(transient_default_name:str):
                             on_change=lambda e : _update_global_xaxis(
                                 e.value,
                                 allphot,
-                                sed_fig,
                                 sed_plot,
-                                meta
+                                dataset
                             )
                         )
                         
                     plot_sed(
                         allphot,
-                        sed_fig,
                         sed_plot,
-                        meta
+                        dataset
                     )
                     
             all_phot_refs = []
