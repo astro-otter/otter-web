@@ -239,6 +239,8 @@ def approve(doc, testing=False):
             # save and remove some keys so the merging works
             _key = res[0]["_key"]
             _id = str(res[0]["_id"])
+            del res[0]["_ra"]
+            del res[0]["_dec"]
             del res[0]["_key"]
             del res[0]["_id"]
             del res[0]["_rev"] # we don't need to save this one
@@ -248,7 +250,10 @@ def approve(doc, testing=False):
             # copy over the special arangodb keys
             merged["_key"] = _key
             merged["_id"] = _id.replace("vetting", "transients")
-            
+            skycoord = merged.get_skycoord()
+            merged["_ra"] = skycoord.ra.deg
+            merged["_dec"] = skycoord.dec.deg
+
             # we also have to delete the document from the OTTER database
             if not testing:
                 log.debug(f"Overwriting old document: {_id}")
