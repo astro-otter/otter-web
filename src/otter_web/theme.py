@@ -61,6 +61,10 @@ def frame(drawer=None):
                     "API Documentation", "https://astro-otter.readthedocs.io"
                 ).classes(replace="")
     
+            with ui.button().props("flat").classes("text-white"):
+                ui.link("Redback Models", os.path.join(WEB_BASE_URL, "redback_interactive")).classes(replace="")
+            
+                
             ui.element("q-space")
 
             #with ui.button().props("flat").classes("text-white"):
