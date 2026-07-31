@@ -62,7 +62,7 @@ def frame(drawer=None):
                 ).classes(replace="")
     
             with ui.button().props("flat").classes("text-white"):
-                ui.link("Redback Models", os.path.join(WEB_BASE_URL, "redback_interactive")).classes(replace="")
+                ui.link("OTTER x Redback", os.path.join(WEB_BASE_URL, "redback_interactive")).classes(replace="")
             
                 
             ui.element("q-space")
