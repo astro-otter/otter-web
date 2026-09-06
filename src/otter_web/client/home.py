@@ -52,14 +52,6 @@ async def page():
             ui.label(
                 "The Open mulTiwavelength Transient Event Repository"
             ).classes("text-h2 col-span-12")
-
-            ui.notify(
-                "Notice: We are making updates to the OTTER web interface! The basic functionality should work as expected. But, please be patient with us if things are not working as expected!",
-                position="bottom",
-                close_button="OK!",
-                type="warning",
-                timeout=0
-            )
             
         # Display the initial
         with ui.grid(rows="40px auto").classes("w-full") as grid:            
