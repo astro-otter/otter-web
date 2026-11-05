@@ -1,23 +1,22 @@
 import os
 import io
 import json
-import signal
 import asyncio
-from nicegui import ui, context, background_tasks
+from concurrent.futures import ThreadPoolExecutor
+from nicegui import ui, context, background_tasks, run
 import numpy as np
 import pandas as pd
 import time
-from requests.exceptions import HTTPError
+from requests.exceptions import RequestException
 
 from astropy.time import Time
 
 from dustmaps.sfd import SFDWebQuery
 
 from ..theme import frame
-from ..config import API_URL, WEB_BASE_URL
-from ..util import _TimeoutError, _timeout_handler
+from ..config import WEB_BASE_URL
+from .search_util import db
 
-from otter import Otter
 from otter.exceptions import FailedQueryError
 
 from plotly import graph_objects as go
@@ -340,8 +339,6 @@ def _parse_references(n0):
     
 def generate_property_table(meta):
 
-    sfd = SFDWebQuery() # for getting the ebv
-    
     # get all of the references for the metadata table
     name_refs = []
     for r in meta["name"]["alias"]:
@@ -401,17 +398,8 @@ def generate_property_table(meta):
                     disc_date_refs.append(f"<u><a href={ADS_BASE_URL+val}>{val}</a></u>")
         disc_date_ref_strs_uq = np.unique(disc_date_refs)
 
-    signal.signal(signal.SIGALRM, _timeout_handler)
-    signal.alarm(5)
-    try:
-        ebv = sfd(meta.get_skycoord())
-    except _TimeoutError:
-        ebv = "SFD query timeout, this is likely an issue with the dustmaps package, not OTTER!"
-    except HTTPError:
-        ebv = "SFD web query failed due to an argonaut/skymaps server issue!"
-    finally:
-        signal.alarm(0)
-    
+    ebv = "Loading..." # filled in later by _fill_ebv
+
     columns = [
         {
             "name": "prop",
@@ -523,9 +511,9 @@ def generate_property_table(meta):
         ui.table(columns=columns, rows=rows, row_key="prop", pagination=len(rows))
         .props("flat")
         .classes("w-full")
-        .add_slot("body-cell-ref", '<q-td v-html="props.row.ref"></q-td>')
     )
-    
+    table.add_slot("body-cell-ref", '<q-td v-html="props.row.ref"></q-td>')
+
     return table
 
 def _update_global_delta_t(new_delta_t, *args, **kwargs):
@@ -548,7 +536,28 @@ def _update_global_xaxis(new_xaxis, *args, **kwargs):
     XAXIS = new_xaxis
     plot_sed(*args, **kwargs)
 
-async def _load_phot(transient, obs_types, label_map):
+# dustmaps' web query has no request timeout, so a hung call can tie up its thread
+# for minutes. Give it its own small pool so it can't starve the shared one.
+_SFD_POOL = ThreadPoolExecutor(max_workers=2)
+
+async def _fill_ebv(table, coord):
+    loop = asyncio.get_running_loop()
+    try:
+        ebv = await asyncio.wait_for(
+            loop.run_in_executor(_SFD_POOL, SFDWebQuery(), coord),
+            timeout=5
+        )
+    except asyncio.TimeoutError:
+        ebv = "SFD query timeout, this is likely an issue with the dustmaps package, not OTTER!"
+    except RequestException:
+        ebv = "SFD web query failed due to an argonaut/skymaps server issue!"
+
+    for row in table.rows:
+        if row["prop"] == "MW E(B-V)":
+            row["val"] = ebv
+    table.update()
+
+def _load_phot(transient, obs_types, label_map):
     phot_types = {}
     for obs_type, u in obs_types.items():
         try:
@@ -573,45 +582,59 @@ async def _load_phot(transient, obs_types, label_map):
     return allphot, phot_types
 
 async def _add_aladin_viewer(dataset, aladin_container, fov_deg):
-    await asyncio.sleep(10.0)  # Give Plotly time to render first
+    try:
+        await asyncio.sleep(10.0)  # Give Plotly time to render first
 
-    with aladin_container:
-        aladin_html = f"""
-        <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
-        """
+        with aladin_container:
+            aladin_html = f"""
+            <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
+            """
 
-        # First set the HTML content (without script)
-        aladin_container.content = aladin_html
+            # First set the HTML content (without script)
+            aladin_container.content = aladin_html
 
-        # Then run the script separately
-        ui.run_javascript(f"""
-        A.init.then( () => {{
-            aladin = A.aladin('#aladin-lite-div', {{
-                survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/', 
-                fov:{fov_deg}, 
-                target: "{dataset.get_skycoord().to_string('hmsdms', sep=':')}"
-            }});
-        }});
-        """)
+            # Then load aladin.js asynchronously and initialize the viewer.
+            # If the CDS servers are down, the viewer just never shows up.
+            ui.run_javascript(f"""
+            (function () {{
+                const init = () => A.init.then( () => {{
+                    aladin = A.aladin('#aladin-lite-div', {{
+                        survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/',
+                        fov:{fov_deg},
+                        target: "{dataset.get_skycoord().to_string('hmsdms', sep=':')}"
+                    }});
+                }});
+                if (window.A) {{ init(); return; }}
+                const fail = () => {{
+                    const d = document.getElementById('aladin-lite-div');
+                    if (d) d.remove();
+                    console.warn('Aladin Lite failed to load');
+                }};
+                const s = document.createElement('script');
+                s.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
+                s.async = true;
+                const t = setTimeout(fail, 15000);
+                s.onload = () => {{ clearTimeout(t); init(); }};
+                s.onerror = () => {{ clearTimeout(t); fail(); }};
+                document.head.appendChild(s);
+            }})();
+            """)
 
-        logger.info("Aladin viewer added")
-    
+            logger.info("Aladin viewer added")
+    except Exception as e:
+        logger.warning(f"Failed to add the Aladin viewer: {e}")
+
 @ui.page(os.path.join(WEB_BASE_URL, 'transient', '{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
-    ui.add_head_html("""
-    <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
-    """)
-    
     global DELTA_T
     global MIN_T
     global MAX_T
 
-    logger.info("Connecting to the database and loading metadata...")
-    db = Otter(url=API_URL)
-    dataset = db.query(names=transient_default_name)[0]
+    logger.info("Loading metadata...")
+    dataset = (await run.io_bound(db.query, names=transient_default_name))[0]
     json_data = json.dumps(dict(dataset), indent=4)
-    
+
     obs_types = {
         'radio':'mJy',
         'uvoir':'mag(AB)',
@@ -623,26 +646,10 @@ async def transient_subpage(transient_default_name:str):
         'uvoir' : 'UV/Optical/IR'
     }
 
-    start = time.time()
-    logger.info("Loading photometry...")
-    with suppress_logger(logger):
-        allphot, phot_types = await _load_phot(
-            dataset,
-            obs_types,
-            label_map
-        )
-    if allphot is not None:
-        allphot_str = io.BytesIO()
-        allphot.to_csv(allphot_str, index=False, encoding="utf-8")
-
-    logger.info(f"Loading the photometry took {time.time()-start}s")
-    
-    hasphot = len(phot_types) > 0
-    
     fov_arcmin = 1.5
     fov_deg = fov_arcmin / 60
 
-    logger.info("Adding aladin viewer and photometry plots...")
+    logger.info("Adding metadata and aladin viewer...")
     with frame():
         
         with ui.grid(columns=6):
@@ -657,15 +664,7 @@ async def transient_subpage(transient_default_name:str):
                             f"{transient_default_name}.json"
                         )
                     )
-                if hasphot:
-                    with ui.row():
-                        ui.button(
-                            "Download Cleaned Photometry (CSV)",
-                            on_click=lambda: ui.download(
-                                allphot_str.getvalue(),
-                                f"{transient_default_name}-cleaned-photometry.csv"
-                            )
-                        )
+                phot_download_row = ui.row() # filled in once photometry loads
 
             with ui.column().classes("col-span-3"):
                 ui.element("div")
@@ -681,7 +680,49 @@ async def transient_subpage(transient_default_name:str):
             
         ui.label(f'Properties').classes("text-h4")
         table = generate_property_table(dataset)
-        
+
+        with ui.column().classes("w-full") as phot_container:
+            with ui.row().classes("items-center"):
+                ui.spinner(size="lg")
+                ui.label("Loading photometry...")
+
+    # send the page to the browser, then do the slow work in background threads
+    try:
+        await context.client.connected(timeout=30)
+    except TimeoutError:
+        return
+
+    background_tasks.create(_fill_ebv(table, dataset.get_skycoord()))
+
+    start = time.time()
+    logger.info("Loading photometry...")
+    with suppress_logger(logger):
+        allphot, phot_types = await run.io_bound(
+            _load_phot, dataset, obs_types, label_map
+        )
+    logger.info(f"Loading the photometry took {time.time()-start}s")
+
+    hasphot = len(phot_types) > 0
+
+    if allphot is not None:
+        allphot_str = io.BytesIO()
+        allphot.to_csv(allphot_str, index=False, encoding="utf-8")
+
+    if hasphot:
+        with phot_download_row:
+            ui.button(
+                "Download Cleaned Photometry (CSV)",
+                on_click=lambda: ui.download(
+                    allphot_str.getvalue(),
+                    f"{transient_default_name}-cleaned-photometry.csv"
+                )
+            )
+
+    phot_container.clear()
+    with phot_container:
+        if not hasphot:
+            ui.label("No photometry available for this transient.")
+
         if hasphot:
             # ui.label(f'Plots').classes("text-h3")
 
