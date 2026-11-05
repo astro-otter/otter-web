@@ -573,36 +573,51 @@ async def _load_phot(transient, obs_types, label_map):
     return allphot, phot_types
 
 async def _add_aladin_viewer(dataset, aladin_container, fov_deg):
-    await asyncio.sleep(10.0)  # Give Plotly time to render first
+    try:
+        await asyncio.sleep(10.0)  # Give Plotly time to render first
 
-    with aladin_container:
-        aladin_html = f"""
-        <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
-        """
+        with aladin_container:
+            aladin_html = f"""
+            <div id="aladin-lite-div" style="width:200px;height:200px;"></div>
+            """
 
-        # First set the HTML content (without script)
-        aladin_container.content = aladin_html
+            # First set the HTML content (without script)
+            aladin_container.content = aladin_html
 
-        # Then run the script separately
-        ui.run_javascript(f"""
-        A.init.then( () => {{
-            aladin = A.aladin('#aladin-lite-div', {{
-                survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/', 
-                fov:{fov_deg}, 
-                target: "{dataset.get_skycoord().to_string('hmsdms', sep=':')}"
-            }});
-        }});
-        """)
+            # Then load aladin.js asynchronously and initialize the viewer.
+            # If the CDS servers are down, the viewer just never shows up.
+            ui.run_javascript(f"""
+            (function () {{
+                const init = () => A.init.then( () => {{
+                    aladin = A.aladin('#aladin-lite-div', {{
+                        survey: 'https://alasky.cds.unistra.fr/DSS/DSSColor/',
+                        fov:{fov_deg},
+                        target: "{dataset.get_skycoord().to_string('hmsdms', sep=':')}"
+                    }});
+                }});
+                if (window.A) {{ init(); return; }}
+                const fail = () => {{
+                    const d = document.getElementById('aladin-lite-div');
+                    if (d) d.remove();
+                    console.warn('Aladin Lite failed to load');
+                }};
+                const s = document.createElement('script');
+                s.src = 'https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js';
+                s.async = true;
+                const t = setTimeout(fail, 15000);
+                s.onload = () => {{ clearTimeout(t); init(); }};
+                s.onerror = () => {{ clearTimeout(t); fail(); }};
+                document.head.appendChild(s);
+            }})();
+            """)
 
-        logger.info("Aladin viewer added")
-    
+            logger.info("Aladin viewer added")
+    except Exception as e:
+        logger.warning(f"Failed to add the Aladin viewer: {e}")
+
 @ui.page(os.path.join(WEB_BASE_URL, 'transient', '{transient_default_name}'))
 async def transient_subpage(transient_default_name:str):
 
-    ui.add_head_html("""
-    <script type="text/javascript" src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
-    """)
-    
     global DELTA_T
     global MIN_T
     global MAX_T
